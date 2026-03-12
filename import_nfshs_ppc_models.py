@@ -110,11 +110,12 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 				obj.matrix_world = m
 		for i in range(0, len(trk[2])):
 			vertices, uvs, polygons, texture_name = trk[2][i]
+			walls_indices = trk[3][i]
 			if len(vertices) > 0:
-				obj = create_object("Wall", vertices, uvs, polygons, texture_name)
+				obj = create_object("Wall", vertices, uvs, walls_indices, texture_name)
 				walls_collection.objects.link(obj)
 				obj.matrix_world = m
-		vertices, uvs, polygons, texture_name = trk[3]
+		vertices, uvs, polygons, texture_name = trk[4]
 		unpacked_polygons = []
 		for i in range(0, len(polygons)):
 			unpacked_polygon = polygons[i][0]
@@ -281,6 +282,8 @@ def read_trk(file_path):
 		vrt_list = []
 		vrt_ind = 0
 		
+		polygon_indices = {}
+		
 		num_vrtx = struct.unpack('<I', f.read(0x4))[0]
 		
 		for j in range(0, num_vrtx):
@@ -293,22 +296,20 @@ def read_trk(file_path):
 			uv = struct.unpack('<2f', f.read(0x8))
 			uvs.append(uv)
 		
-		num_plgn = struct.unpack('<I', f.read(0x4))[0]
-			
-		for j in range(0, num_plgn):
-			#print('Position Offset:', f.tell())
-			#print('Quads No.:', j)
-			quad = struct.unpack('<4H', f.read(0x8))
-			#print('Quads Indices:', quad)
-			unknown_xyz = struct.unpack('<3f', f.read(0xC))
-			#print('Unknown XYZ:', unknown_xyz)
-			unknown_xyzw = struct.unpack('<4f', f.read(0x10))
-			#print('Unknown XYZW:', unknown_xyzw)
-			num_additional_poly = struct.unpack('<I', f.read(0x4))[0]
-			#print('Number of quad triangles:', num_additional_poly)
-			for k in range(0, num_additional_poly):
-				padding = struct.unpack('<I', f.read(0x4))[0]
+		num_quad = struct.unpack('<I', f.read(0x4))[0]
+		
+		for j in range(0, num_quad):
+			quad_indices = struct.unpack('<4H', f.read(0x8))
+			quad_center = struct.unpack('<3f', f.read(0xC))
+			quad_quaternion = struct.unpack('<4f', f.read(0x10))
+			num_plgn = struct.unpack('<I', f.read(0x4))[0]
+			for k in range(0, num_plgn):
+				wall_index = struct.unpack('<I', f.read(0x4))[0]
 				polygon = struct.unpack('<3H', f.read(0x6))
+				if wall_index not in polygon_indices:
+					polygon_indices[wall_index] = []
+				polygon_indices[wall_index].append(polygon)
+				
 				#print('Triangle Indices:', polygon)
 			flat_images = struct.unpack('<I', f.read(0x4))[0]
 			#print('Sprites:', flat_images)
@@ -322,14 +323,18 @@ def read_trk(file_path):
 				#print('Coordinates:', some_xyz)
 				some_index = struct.unpack('<I', f.read(0x4))[0]
 				#print('Coordinates index:', some_index)
-			quads[j] = [quad, unknown_xyz]
+			quads[j] = [quad_indices, quad_center]
 		
 		texture_length = struct.unpack('<I', f.read(0x4))[0]
 		texture_name = f.read(texture_length)
-			
+		
 		road = [vertices, uvs, quads, texture_name]
 	
-	trk = [coords, objects, walls, road]
+	#print(polygon_indices)
+	
+	walls_indices = polygon_indices
+	
+	trk = [coords, objects, walls, walls_indices, road]
 	
 	return trk
 
