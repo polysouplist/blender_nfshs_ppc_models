@@ -114,12 +114,19 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 				obj = create_object("Wall", vertices, uvs, polygons, texture_name)
 				walls_collection.objects.link(obj)
 				obj.matrix_world = m
-		for i in range(0, len(trk[3])):
-			vertices, uvs, polygons, texture_name = trk[3][i]
-			if len(vertices) > 0:
-				obj = create_object("Road", vertices, uvs, polygons, texture_name)
-				road_collection.objects.link(obj)
-				obj.matrix_world = m
+		vertices, uvs, polygons, texture_name = trk[3]
+		unpacked_polygons = []
+		for i in range(0, len(polygons)):
+			unpacked_polygon = polygons[i][0]
+			unpacked_locator = polygons[i][1]
+			unpacked_polygons.append(unpacked_polygon)
+			locator = bpy.data.objects.new("Locator", None)
+			road_collection.objects.link(locator)
+			locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
+		if len(vertices) > 0:
+			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name)
+			road_collection.objects.link(obj)
+			obj.matrix_world = m
 	
 	elapsed_time = time.time() - importing_time
 	print("... %.4fs" % elapsed_time)
@@ -257,47 +264,72 @@ def read_trk(file_path):
 				uv = struct.unpack('<2f', f.read(0x8))
 				uvs.append(uv)
 			
-			for j in range(0, num_vrtx):
+			for j in range(0, num_vrtx, 2):
 				polygon = vrt_list[j:j + 3]
 				polygons.append(polygon)
 			
 			texture_length = struct.unpack('<I', f.read(0x4))[0]
 			texture_name = f.read(texture_length)
 			
+			#print(polygons)
+			
 			walls[i] = [vertices, uvs, [], texture_name]
 		
-		num_roads = 1
+		vertices = []
+		uvs = []
+		quads = {}
+		vrt_list = []
+		vrt_ind = 0
 		
-		for i in range (0, num_roads):
-			vertices = []
-			uvs = []
-			vrt_list = []
-			vrt_ind = 0
+		num_vrtx = struct.unpack('<I', f.read(0x4))[0]
+		
+		for j in range(0, num_vrtx):
+			vertex = struct.unpack('<3f', f.read(0xC))
+			vertices.append(vertex)
+			vrt_list.append(vrt_ind)
+			vrt_ind += 1
+		
+		for j in range(0, num_vrtx):
+			uv = struct.unpack('<2f', f.read(0x8))
+			uvs.append(uv)
+		
+		num_plgn = struct.unpack('<I', f.read(0x4))[0]
 			
-			num_vrtx = struct.unpack('<I', f.read(0x4))[0]
+		for j in range(0, num_plgn):
+			#print('Position Offset:', f.tell())
+			#print('Quads No.:', j)
+			quad = struct.unpack('<4H', f.read(0x8))
+			#print('Quads Indices:', quad)
+			unknown_xyz = struct.unpack('<3f', f.read(0xC))
+			#print('Unknown XYZ:', unknown_xyz)
+			unknown_xyzw = struct.unpack('<4f', f.read(0x10))
+			#print('Unknown XYZW:', unknown_xyzw)
+			num_additional_poly = struct.unpack('<I', f.read(0x4))[0]
+			#print('Number of quad triangles:', num_additional_poly)
+			for k in range(0, num_additional_poly):
+				padding = struct.unpack('<I', f.read(0x4))[0]
+				polygon = struct.unpack('<3H', f.read(0x6))
+				#print('Triangle Indices:', polygon)
+			flat_images = struct.unpack('<I', f.read(0x4))[0]
+			#print('Sprites:', flat_images)
+			for k in range (0, flat_images):
+				flat_image = struct.unpack('<I', f.read(0x4))[0]
+				#print('Flat_image:', flat_image)
+			some_count = struct.unpack('<I', f.read(0x4))[0]
+			#print('Coordinates count:', some_count)
+			for k in range(0, some_count):
+				some_xyz = struct.unpack('<3f', f.read(0xC))
+				#print('Coordinates:', some_xyz)
+				some_index = struct.unpack('<I', f.read(0x4))[0]
+				#print('Coordinates index:', some_index)
+			quads[j] = [quad, unknown_xyz]
+		
+		texture_length = struct.unpack('<I', f.read(0x4))[0]
+		texture_name = f.read(texture_length)
 			
-			for j in range(0, num_vrtx):
-				vertex = struct.unpack('<3f', f.read(0xC))
-				vertices.append(vertex)
-				vrt_list.append(vrt_ind)
-				vrt_ind += 1
-			
-			for j in range(0, num_vrtx):
-				uv = struct.unpack('<2f', f.read(0x8))
-				uvs.append(uv)
-			
-			num_plgn = struct.unpack('<I', f.read(0x4))[0]
-			
-			for j in range(0, num_vrtx):
-				polygon = vrt_list[j:j + 4]
-				polygons.append(polygon)
-			
-			texture_length = struct.unpack('<I', f.read(0x4))[0]
-			texture_name = (b'\x00')
-			
-			roads[i] = [vertices, uvs, [], texture_name]
+		road = [vertices, uvs, quads, texture_name]
 	
-	trk = [coords, objects, walls, roads]
+	trk = [coords, objects, walls, road]
 	
 	return trk
 
@@ -323,8 +355,12 @@ def create_object(name, vertices, uvs, faces, texture_name):
 		BMVert_dictionary[i] = BMVert
 	
 	for i, face in enumerate(faces):
-		face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[1]], BMVert_dictionary[face[2]]]
-		face_uvs = [uvs[face[0]], uvs[face[1]], uvs[face[2]]]
+		if len(face) == 4:
+			face_vertices = [BMVert_dictionary[face[3]], BMVert_dictionary[face[2]], BMVert_dictionary[face[0]], BMVert_dictionary[face[1]]]
+			face_uvs = [uvs[face[3]], uvs[face[2]], uvs[face[0]], uvs[face[1]]]
+		else:
+			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[1]], BMVert_dictionary[face[2]]]
+			face_uvs = [uvs[face[0]], uvs[face[1]], uvs[face[2]]]
 		try:
 			BMFace = bm.faces.get(face_vertices) or bm.faces.new(face_vertices)
 		except:
