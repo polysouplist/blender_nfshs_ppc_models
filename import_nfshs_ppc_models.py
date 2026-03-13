@@ -37,7 +37,7 @@ from bpy_extras.io_utils import (
 import bmesh
 import binascii
 import math
-from mathutils import Matrix
+from mathutils import Matrix, Quaternion
 import os
 import time
 import struct
@@ -96,6 +96,10 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 		main_collection.children.link(walls_collection)
 		road_collection = bpy.data.collections.new("Road")
 		main_collection.children.link(road_collection)
+		node_collection = bpy.data.collections.new("Nodes")
+		road_collection.children.link(node_collection)
+		sprite_collection = bpy.data.collections.new("Sprites")
+		road_collection.children.link(sprite_collection)
 		for i in range(0, len(trk[0])):
 			unk_coord, coord = trk[0][i]
 			position = bpy.data.objects.new("Position", None)
@@ -120,10 +124,25 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 		for i in range(0, len(polygons)):
 			unpacked_polygon = polygons[i][0]
 			unpacked_locator = polygons[i][1]
+			locator_quaternion = polygons[i][2]
+			sprite_positions = polygons[i][3]
+			
 			unpacked_polygons.append(unpacked_polygon)
-			locator = bpy.data.objects.new("Locator", None)
-			road_collection.objects.link(locator)
+			locator = bpy.data.objects.new("Node", None)
+			locator.empty_display_type = 'SINGLE_ARROW'
+			node_collection.objects.link(locator)
 			locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
+			locator.rotation_mode = 'QUATERNION'
+			locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[2], locator_quaternion[0], locator_quaternion[1]]
+			
+		for i in range(0, len(sprite_positions)):
+			sprite_xyz, sprite_index = sprite_positions[i]
+			
+			sprite_empty = bpy.data.objects.new("Sprite", None)
+			sprite_empty["unk_index"] = sprite_index
+			sprite_collection.objects.link(sprite_empty)
+			sprite_empty.matrix_world = m @ Matrix.Translation(sprite_xyz)
+		
 		if len(vertices) > 0:
 			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name)
 			road_collection.objects.link(obj)
@@ -263,6 +282,7 @@ def read_trk(file_path):
 			
 			for j in range(0, num_vrtx):
 				uv = struct.unpack('<2f', f.read(0x8))
+				uv = [uv[0], -uv[1] + 1.0]
 				uvs.append(uv)
 			
 			for j in range(0, num_vrtx, 2):
@@ -281,6 +301,7 @@ def read_trk(file_path):
 		quads = {}
 		vrt_list = []
 		vrt_ind = 0
+		sprite = []
 		
 		polygon_indices = {}
 		
@@ -294,6 +315,7 @@ def read_trk(file_path):
 		
 		for j in range(0, num_vrtx):
 			uv = struct.unpack('<2f', f.read(0x8))
+			uv = [uv[0], -uv[1] + 1.0]
 			uvs.append(uv)
 		
 		num_quad = struct.unpack('<I', f.read(0x4))[0]
@@ -320,10 +342,13 @@ def read_trk(file_path):
 			#print('Coordinates count:', some_count)
 			for k in range(0, some_count):
 				some_xyz = struct.unpack('<3f', f.read(0xC))
-				#print('Coordinates:', some_xyz)
 				some_index = struct.unpack('<I', f.read(0x4))[0]
-				#print('Coordinates index:', some_index)
-			quads[j] = [quad_indices, quad_center]
+				
+				some_combined = [some_xyz, some_index]
+				
+				sprite.append(some_combined)
+				
+			quads[j] = [quad_indices, quad_center, quad_quaternion, sprite]
 		
 		texture_length = struct.unpack('<I', f.read(0x4))[0]
 		texture_name = f.read(texture_length)
