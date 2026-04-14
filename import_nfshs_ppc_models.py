@@ -26,7 +26,6 @@ from bpy.types import (
 from bpy.props import (
 	StringProperty,
 	BoolProperty,
-	EnumProperty,
 	CollectionProperty
 )
 from bpy_extras.io_utils import (
@@ -43,7 +42,7 @@ import time
 import struct
 
 
-def main(context, file_path, resource_version, clear_scene, global_matrix):
+def main(context, file_path, clear_scene, global_matrix):
 	if bpy.ops.object.mode_set.poll():
 		bpy.ops.object.mode_set(mode='OBJECT')
 	
@@ -51,12 +50,12 @@ def main(context, file_path, resource_version, clear_scene, global_matrix):
 		print("Clearing scene...")
 		clearScene(context)
 	
-	status = import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, global_matrix)
+	status = import_nfshs_ppc_models(context, file_path, clear_scene, global_matrix)
 	
 	return status
 
 
-def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m):
+def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 	start_time = time.time()
 	
 	main_collection_name = os.path.basename(file_path)
@@ -69,10 +68,15 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 	print("Parsing file...")
 	parsing_time = time.time()
 	
-	if resource_version == 'Z3D':
-		object = read_z3d(file_path)
-	elif resource_version == 'TRK':
+	file_extension = file_path[-4:].lower()
+	
+	if file_extension == ".z3d":
+		objects = read_z3d(file_path)
+	elif file_extension == ".trk":
 		trk = read_trk(file_path)
+	else:
+		print("ERROR: Unknown file extension %s." % (file_extension))
+		return {'CANCELLED'}
 	
 	elapsed_time = time.time() - parsing_time
 	print("... %.4fs" % elapsed_time)
@@ -81,13 +85,14 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 	print("Importing data to scene...")
 	importing_time = time.time()
 	
-	if resource_version == 'Z3D':
-		name, vertices, uvs, polygons, texture_name = object
-		if len(vertices) > 0:
-			obj = create_object(name, vertices, uvs, polygons, texture_name)
-			main_collection.objects.link(obj)
-			obj.matrix_world = m
-	elif resource_version == 'TRK':
+	if file_extension == ".z3d":
+		for i in range(0, len(objects)):
+			name, vertices, uvs, polygons, texture_name = objects[i]
+			if len(vertices) > 0:
+				obj = create_object(name, vertices, uvs, polygons, texture_name)
+				main_collection.objects.link(obj)
+				obj.matrix_world = m
+	elif file_extension == ".trk":
 		positions_collection = bpy.data.collections.new("Positions")
 		main_collection.children.link(positions_collection)
 		objects_collection = bpy.data.collections.new("Objects")
@@ -150,11 +155,11 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 			road_collection.objects.link(obj)
 			obj.matrix_world = m
 		
-		minimap_vertices = trk[5]
-		if len(minimap_vertices) > 0:
+		minimap = trk[5]
+		if len(minimap[0]) > 0:
 			mesh = bpy.data.meshes.new("Minimap")
 			obj = bpy.data.objects.new("Minimap", mesh)
-			mesh.from_pydata(minimap_vertices, [], [])
+			mesh.from_pydata(minimap[0], [], minimap[1])
 			minimap_collection.objects.link(obj)
 			obj.matrix_world = m
 	
@@ -181,43 +186,48 @@ def import_nfshs_ppc_models(context, file_path, resource_version, clear_scene, m
 
 
 def read_z3d(file_path):
-	vertices = []
-	uvs = []
-	polygons = []
+	z3d = []
 	
 	with open(file_path, "rb") as f:
 		header_size = struct.unpack('<I', f.read(0x4))[0]
 		header = f.read(header_size)
 		
-		unk0 = struct.unpack('<I', f.read(0x4))[0]
-		unk1 = struct.unpack('<I', f.read(0x4))[0]
-		unk2 = struct.unpack('<I', f.read(0x4))[0]
+		num_meshes = struct.unpack('<I', f.read(0x4))[0]
 		
-		name_length = struct.unpack('<I', f.read(0x4))[0]
-		name = f.read(name_length)
-		name = str(name, 'ascii')
-		f.read(0x1)
-		
-		num_vrtx = struct.unpack('<I', f.read(0x4))[0]
-		num_plgn = struct.unpack('<I', f.read(0x4))[0]
-		
-		for i in range(0, num_vrtx):
-			vertex = struct.unpack('<3f', f.read(0xC))
-			vertices.append(vertex)
-		
-		for i in range(0, num_vrtx):
-			uv = struct.unpack('<2f', f.read(0x8))
-			uvs.append(uv)
-		
-		for i in range(0, num_plgn):
-			polygon = struct.unpack('<3H', f.read(0x6))
-			polygons.append(polygon)
-		
-		texture_length = struct.unpack('<I', f.read(0x4))[0]
-		texture_name = f.read(texture_length)
-		f.read(0x1)
-	
-	z3d = [name, vertices, uvs, polygons, texture_name]
+		for i in range(0, num_meshes):
+			vertices = []
+			uvs = []
+			polygons = []
+			
+			has_uv = struct.unpack('<I', f.read(0x4))[0]
+			unknown = struct.unpack('<I', f.read(0x4))[0]
+			
+			name_length = struct.unpack('<I', f.read(0x4))[0]
+			name = f.read(name_length)
+			name = str(name, 'ascii')
+			f.read(0x1)
+			
+			num_vrtx = struct.unpack('<I', f.read(0x4))[0]
+			num_plgn = struct.unpack('<I', f.read(0x4))[0]
+			
+			for j in range(0, num_vrtx):
+				vertex = struct.unpack('<3f', f.read(0xC))
+				vertices.append(vertex)
+			
+			if has_uv != 0:
+				for j in range(0, num_vrtx):
+					uv = struct.unpack('<2f', f.read(0x8))
+					uvs.append(uv)
+			
+			for j in range(0, num_plgn):
+				polygon = struct.unpack('<3H', f.read(0x6))
+				polygons.append(polygon)
+			
+			texture_length = struct.unpack('<I', f.read(0x4))[0]
+			texture_name = f.read(texture_length)
+			f.read(0x1)
+			
+			z3d.append([name, vertices, uvs, polygons, texture_name])
 	
 	return z3d
 
@@ -351,12 +361,29 @@ def read_trk(file_path):
 		
 		road = [vertices, uvs, quads, texture_name]
 		
+		num_minimap_vrtx = int(num_vrtx/2)
 		minimap_vertices = []
-		for i in range(0, int(num_vrtx/2)):
+		minimap_quads = []
+		vrt_list = []
+		vrt_ind = 0
+		for i in range(0, num_minimap_vrtx):
 			minimap_vertex = struct.unpack('<3f', f.read(0xC))
 			minimap_vertices.append(minimap_vertex)
+			vrt_list.append(vrt_ind)
+			vrt_ind += 1
+			
+		for i in range(0, num_minimap_vrtx, 4):
+			quad = vrt_list[i:i + 4]
+			try:
+				quad = (quad[3], quad[2], quad[0], quad[1])
+			except:
+				quad = (1, 0, quad[0], quad[1])
+			minimap_quads.append(quad)
+		#minimap_quads[-1].extend([0, 1])
+		
+		minimap = [minimap_vertices, minimap_quads]
 	
-	trk = [coords, objects, walls, walls_indices, road, minimap_vertices]
+	trk = [coords, objects, walls, walls_indices, road, minimap]
 	
 	return trk
 
@@ -373,8 +400,12 @@ def create_object(name, vertices, uvs, faces, texture_name):
 	
 	BMVert_dictionary = {}
 	
-	uvName = "UVMap" #or UV1Map
-	uv_layer = bm.loops.layers.uv.get(uvName) or bm.loops.layers.uv.new(uvName)
+	if uvs:
+		has_uv = True
+		uvName = "UVMap" #or UV1Map
+		uv_layer = bm.loops.layers.uv.get(uvName) or bm.loops.layers.uv.new(uvName)
+	else:
+		has_uv = False
 	
 	for i, position in enumerate(vertices):
 		BMVert = bm.verts.new(position)
@@ -384,10 +415,12 @@ def create_object(name, vertices, uvs, faces, texture_name):
 	for i, face in enumerate(faces):
 		if len(face) == 4:
 			face_vertices = [BMVert_dictionary[face[3]], BMVert_dictionary[face[2]], BMVert_dictionary[face[0]], BMVert_dictionary[face[1]]]
-			face_uvs = [uvs[face[3]], uvs[face[2]], uvs[face[0]], uvs[face[1]]]
+			if has_uv == True:
+				face_uvs = [uvs[face[3]], uvs[face[2]], uvs[face[0]], uvs[face[1]]]
 		else:
 			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[1]], BMVert_dictionary[face[2]]]
-			face_uvs = [uvs[face[0]], uvs[face[1]], uvs[face[2]]]
+			if has_uv == True:
+				face_uvs = [uvs[face[0]], uvs[face[1]], uvs[face[2]]]
 		try:
 			BMFace = bm.faces.get(face_vertices) or bm.faces.new(face_vertices)
 		except:
@@ -396,8 +429,9 @@ def create_object(name, vertices, uvs, faces, texture_name):
 			BMFace = BMFace.copy(verts=False, edges=False)
 		BMFace.index = i
 		
-		for loop, uv in zip(BMFace.loops, face_uvs):
-			loop[uv_layer].uv = uv
+		if has_uv == True:
+			for loop, uv in zip(BMFace.loops, face_uvs):
+				loop[uv_layer].uv = uv
 	
 	material_name = str(texture_name, 'ascii')
 	mat = bpy.data.materials.get(material_name)
@@ -417,14 +451,6 @@ def create_object(name, vertices, uvs, faces, texture_name):
 	bm.free()
 	
 	return obj
-
-
-def option_to_resource_version(resource_version):
-	if resource_version == 'OPT_A':
-		return "Z3D"
-	elif resource_version == 'OPT_B':
-		return "TRK"
-	return "None"
 
 
 def clearScene(context): # OK
@@ -499,14 +525,6 @@ class ImportNFSHSPPC(Operator, ImportHelper):
 	# List of operator properties, the attributes will be assigned
 	# to the class instance from the operator settings before calling.
 	
-	resource_version: EnumProperty(
-			name="Resource version",
-			description="Choose the resource version you want to load",
-			items=(('OPT_A', "Z3D", "Car models"),
-				   ('OPT_B', "TRK", "Track models")),
-			default='OPT_A',
-			)
-	
 	clear_scene: BoolProperty(
 			name="Clear scene",
 			description="Check in order to clear the scene",
@@ -534,7 +552,7 @@ class ImportNFSHSPPC(Operator, ImportHelper):
 			print()
 			
 			for file_path in files_path:
-				status = main(context, file_path, option_to_resource_version(self.resource_version), self.clear_scene, global_matrix)
+				status = main(context, file_path, self.clear_scene, global_matrix)
 				
 				if status == {"CANCELLED"}:
 					self.report({"ERROR"}, "Importing of file %s has been cancelled. Check the system console for information." % os.path.splitext(os.path.basename(file_path))[0])
@@ -553,7 +571,7 @@ class ImportNFSHSPPC(Operator, ImportHelper):
 				print("Importing %d files" % len(files_path))
 			
 			for file_path in files_path:
-				status = main(context, file_path, option_to_resource_version(self.resource_version), self.clear_scene, global_matrix)
+				status = main(context, file_path, self.clear_scene, global_matrix)
 				
 				if status == {"CANCELLED"}:
 					self.report({"ERROR"}, "Importing of file %s has been cancelled. Check the system console for information." % os.path.splitext(os.path.basename(file_path))[0])
@@ -564,7 +582,7 @@ class ImportNFSHSPPC(Operator, ImportHelper):
 		else:
 			os.system('cls')
 			
-			status = main(context, self.filepath, option_to_resource_version(self.resource_version), self.clear_scene, global_matrix)
+			status = main(context, self.filepath, self.clear_scene, global_matrix)
 			
 			if status == {"CANCELLED"}:
 				self.report({"ERROR"}, "Importing has been cancelled. Check the system console for information.")
@@ -578,16 +596,6 @@ class ImportNFSHSPPC(Operator, ImportHelper):
 		
 		sfile = context.space_data
 		operator = sfile.active_operator
-		
-		##
-		box = layout.box()
-		split = box.split(factor=0.75)
-		col = split.column(align=True)
-		col.label(text="Settings", icon="SETTINGS")
-		
-		box.prop(operator, "resource_version")
-		if operator.resource_version == 'OPT_B':
-			box.label(text="Experimental", icon="ERROR")
 		
 		##
 		box = layout.box()
