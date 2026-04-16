@@ -156,10 +156,10 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			obj.matrix_world = m
 		
 		minimap = trk[6]
-		if len(minimap[0]) > 0:
+		if len(minimap) > 0:
 			mesh = bpy.data.meshes.new("Minimap")
 			obj = bpy.data.objects.new("Minimap", mesh)
-			mesh.from_pydata(minimap[0], [], [])
+			mesh.from_pydata(minimap, [], [])
 			minimap_collection.objects.link(obj)
 			obj.matrix_world = m
 	
@@ -367,27 +367,10 @@ def read_trk(file_path):
 		
 		road = [vertices, uvs, quads, texture_name]
 		
-		num_minimap_vrtx = int(len(vertices)/2)
-		minimap_vertices = []
-		minimap_quads = []
-		vrt_list = []
-		vrt_ind = 0
-		for i in range(0, num_minimap_vrtx):
+		minimap = []
+		for i in range(0, (num_quad*2)):
 			minimap_vertex = struct.unpack('<3f', f.read(0xC))
-			minimap_vertices.append(minimap_vertex)
-			vrt_list.append(vrt_ind)
-			vrt_ind += 1
-			
-		for i in range(0, num_minimap_vrtx, 4):
-			quad = vrt_list[i:i + 4]
-			try:
-				quad = (quad[3], quad[2], quad[0], quad[1])
-			except:
-				quad = (1, 0, quad[0], quad[1])
-			minimap_quads.append(quad)
-		#minimap_quads[-1].extend([0, 1])
-		
-		minimap = [minimap_vertices, minimap_quads]
+			minimap.append(minimap_vertex)
 	
 	trk = [cameras, spritelist, objects, walls, polygon_indices, road, minimap]
 	
