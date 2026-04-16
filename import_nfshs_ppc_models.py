@@ -291,7 +291,7 @@ def read_trk_vertex_data(f):
 	return vertex_data
 
 
-def read_spritelist(f):
+def read_trk_spritelist(f):
 	spritelist = {}
 	
 	num_spritenames = struct.unpack('<I', f.read(0x4))[0]
@@ -305,7 +305,7 @@ def read_spritelist(f):
 	return spritelist
 
 
-def read_cameras(f):
+def read_trk_cameras(f):
 	cameras = {}
 	
 	num_cameras = struct.unpack('<I', f.read(0x4))[0]
@@ -322,13 +322,13 @@ def read_trk(file_path):
 	
 	with open(file_path, "rb") as f:
 		
-		cameras = read_cameras(f)
-		spritelist = read_spritelist(f)
+		cameras = read_trk_cameras(f)
+		spritelist = read_trk_spritelist(f)
 		objects = read_trk_objects(f)
 		walls = read_trk_walls(f)
 		
 		quads = {}
-		sprite = []
+		sprites = []
 		
 		polygon_indices = {}
 		
@@ -340,6 +340,7 @@ def read_trk(file_path):
 			quad_indices = struct.unpack('<4H', f.read(0x8))
 			quad_center = struct.unpack('<3f', f.read(0xC))
 			quad_quaternion = struct.unpack('<4f', f.read(0x10))
+			
 			num_plgn = struct.unpack('<I', f.read(0x4))[0]
 			for j in range(0, num_plgn):
 				wall_index = struct.unpack('<I', f.read(0x4))[0]
@@ -348,27 +349,21 @@ def read_trk(file_path):
 					polygon_indices[wall_index] = []
 				polygon_indices[wall_index].append(polygon)
 			
-			flat_images = struct.unpack('<I', f.read(0x4))[0]
+			num_unknown = struct.unpack('<I', f.read(0x4))[0]
+			for j in range (0, num_unknown):
+				unknown = struct.unpack('<I', f.read(0x4))[0]
 			
-			for j in range (0, flat_images):
-				flat_image = struct.unpack('<I', f.read(0x4))[0]
-			
-			some_count = struct.unpack('<I', f.read(0x4))[0]
-			
-			for j in range(0, some_count):
-				some_xyz = struct.unpack('<3f', f.read(0xC))
-				some_index = struct.unpack('<I', f.read(0x4))[0]
+			num_sprites = struct.unpack('<I', f.read(0x4))[0]
+			for j in range(0, num_sprites):
+				sprite_position = struct.unpack('<3f', f.read(0xC))
+				sprite_index = struct.unpack('<I', f.read(0x4))[0]
 				
-				some_combined = [some_xyz, some_index]
+				sprites.append([sprite_position, sprite_index])
 				
-				sprite.append(some_combined)
-				
-			quads[i] = [quad_indices, quad_center, quad_quaternion, sprite]
+			quads[i] = [quad_indices, quad_center, quad_quaternion, sprites]
 		
 		texture_length = struct.unpack('<I', f.read(0x4))[0]
 		texture_name = f.read(texture_length)
-		
-		walls_indices = polygon_indices
 		
 		road = [vertices, uvs, quads, texture_name]
 		
@@ -394,7 +389,7 @@ def read_trk(file_path):
 		
 		minimap = [minimap_vertices, minimap_quads]
 	
-	trk = [cameras, spritelist, objects, walls, walls_indices, road, minimap]
+	trk = [cameras, spritelist, objects, walls, polygon_indices, road, minimap]
 	
 	return trk
 
