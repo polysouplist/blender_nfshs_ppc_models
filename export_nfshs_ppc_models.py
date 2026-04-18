@@ -77,6 +77,20 @@ def main(context, export_path, m):
 		elif file_extension == ".trk":
 			print("ERROR: Exporting .trk not supported yet.")
 			return {'CANCELLED'}
+			
+			for collection in main_collection.children:
+				if collection.name == "Cameras":
+					cameras = collection.objects
+					cameras_ = []
+					
+					for camera in cameras:
+						if camera.type == 'EMPTY':
+							nearest_road_quad = camera["nearest_road_quad"]
+							camera_pos = Matrix(np.linalg.inv(m) @ camera.matrix_world)
+							camera_pos = camera_pos.to_translation()
+							camera_ = [nearest_road_quad, camera_pos]
+						cameras_.append(camera_)
+			
 		else:
 			print("ERROR: Unknown file extension %s." % (file_extension))
 			return {'CANCELLED'}
@@ -88,8 +102,7 @@ def main(context, export_path, m):
 		if file_extension == ".z3d":
 			write_z3d(file_path, meshes)
 		elif file_extension == ".trk":
-			print("ERROR: Exporting .trk not supported yet.")
-			return {'CANCELLED'}
+			write_trk_cameras(file_path, cameras_)
 		
 		elapsed_time = time.time() - writing_time
 		print("\t... %.4fs" % elapsed_time)	
@@ -198,6 +211,24 @@ def write_z3d(file_path, objects):
 			f.write(struct.pack('<I', len(material_name)))
 			f.write(material_name)
 			f.write(struct.pack('<B', 0))
+	
+	return 0
+
+
+def write_trk_cameras(file_path, cameras):
+	os.makedirs(os.path.dirname(file_path), exist_ok = True)
+	
+	with open(file_path, "wb") as f:
+		
+		num_cameras = len(cameras)
+		
+		f.write(struct.pack('<I', num_cameras))
+		
+		for i in range(0, num_cameras):
+			nearest_road_quad, camera_pos = cameras[i]
+			
+			f.write(struct.pack('<I', nearest_road_quad))
+			f.write(struct.pack('<3f', *camera_pos))
 	
 	return 0
 
