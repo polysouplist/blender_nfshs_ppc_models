@@ -58,63 +58,38 @@ def main(context, export_path, m):
 		
 		print("Reading scene data for main collection %s..." % (main_collection.name))
 		
-		objects = main_collection.objects
+		file_extension = file_path[-4:].lower()
 		
-		meshes = []
-		
-		for object in objects:
-			if object.type == 'MESH':
-				name, vertices, uvs, faces, material_name, status = read_object(object)
+		if file_extension == ".z3d":
+			objects = main_collection.objects
+			meshes = []
+			
+			for object in objects:
+				if object.type == 'MESH':
+					name, vertices, uvs, faces, material_name, status = read_object(object)
+					mesh = [name, vertices, uvs, faces, material_name]
 				
-				mesh = [name, vertices, uvs, faces, material_name]
-				
-			meshes.append(mesh)
-		"""
 				if status == 1:
 					return {'CANCELLED'}
 				
-				pos = Matrix(np.linalg.inv(m) @ object.matrix_world)
-				pos = pos.to_translation()
-				pos = [round(pos[0]*POS_SCALE), round(pos[1]*POS_SCALE), round(pos[2]*POS_SCALE)]
-				
-				try:
-					object_unk0 = id_to_int(object["object_unk0"])
-				except:
-					print("WARNING: object %s is missing parameter %s. Assuming some value (0)." % (object.name, '"object_unk0"'))
-					object_unk0 = 0
-				try:
-					object_unk1 = id_to_int(object["object_unk1"])
-				except:
-					print("WARNING: object %s is missing parameter %s. Assuming some value (0)." % (object.name, '"object_unk1"'))
-					object_unk1 = 0
-				
-				object_unk2 = 0	#Always == 0x0
-				object_unk3 = 1	#Always == 0x1
-				object_unk4 = 1	#Always == 0x1
-				
-				offset = []
-				if num_vrtx % 2 == 1:
-					try:
-						mesh = object.data
-						offset = mesh["offset"]
-						offset = id_to_bytes(offset)
-					except:
-						offset = (b'\x00' * 0x6)
-				
-				GeoMesh = [num_vrtx, num_plgn, pos, object_unk0, object_unk1, object_unk2, object_unk3, object_unk4, vertices, offset, polygons]			
-			else:
-				GeoMesh = [0, 0, [0, 0, 0], 0, 0, 0, 1, 1, [], [], []]
-			
-			GeoMeshes.append(GeoMesh)
+				meshes.append(mesh)
 		
-		GeoGeometry = [header_unk0, header_unk1, header_unk2, GeoMeshes]
-		"""
+		elif file_extension == ".trk":
+			print("ERROR: Exporting .trk not supported yet.")
+			return {'CANCELLED'}
+		else:
+			print("ERROR: Unknown file extension %s." % (file_extension))
+			return {'CANCELLED'}
 		
 		## Writing data
 		print("\tWriting data...")
 		writing_time = time.time()
 		
-		write_z3d(file_path, meshes)
+		if file_extension == ".z3d":
+			write_z3d(file_path, meshes)
+		elif file_extension == ".trk":
+			print("ERROR: Exporting .trk not supported yet.")
+			return {'CANCELLED'}
 		
 		elapsed_time = time.time() - writing_time
 		print("\t... %.4fs" % elapsed_time)	
@@ -193,7 +168,7 @@ def write_z3d(file_path, objects):
 			
 			if len(uvs) != 0:
 				has_uv = True
-				f.write(struct.pack('<I', 1))	#has_uv
+				f.write(struct.pack('<I', 1))
 			else:
 				has_uv = False
 				f.write(struct.pack('<I', 0))
