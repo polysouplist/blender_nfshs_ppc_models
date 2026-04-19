@@ -75,21 +75,53 @@ def main(context, export_path, m):
 				meshes.append(mesh)
 		
 		elif file_extension == ".trk":
-			print("ERROR: Exporting .trk not supported yet.")
-			return {'CANCELLED'}
+			print("Experimental .trk export requires adding the rest of data with a hex editor.")
 			
 			for collection in main_collection.children:
-				if collection.name == "Cameras":
-					cameras = collection.objects
-					cameras_ = []
+				if collection.name.lower() == "cameras":
+					objects = collection.objects
+					cameras = []
 					
-					for camera in cameras:
-						if camera.type == 'EMPTY':
-							nearest_road_quad = camera["nearest_road_quad"]
-							camera_pos = Matrix(np.linalg.inv(m) @ camera.matrix_world)
+					for object in objects:
+						if object.type == 'EMPTY':
+							nearest_road_quad = object["nearest_road_quad"]
+							camera_pos = Matrix(np.linalg.inv(m) @ object.matrix_world)
 							camera_pos = camera_pos.to_translation()
-							camera_ = [nearest_road_quad, camera_pos]
-						cameras_.append(camera_)
+							camera = [nearest_road_quad, camera_pos]
+						cameras.append(camera)
+				
+				elif collection.name.lower() == "sprites":
+					spritelist = collection["spritelist"]
+				
+				elif collection.name.lower() == "objects":
+					objects = collection.objects
+					meshes = []
+					
+					for object in objects:
+						if object.type == 'MESH':
+							name, vertices, uvs, faces, material_name, status = read_object(object)
+							mesh = [vertices, uvs, faces, material_name]
+						
+						if status == 1:
+							return {'CANCELLED'}
+						
+						meshes.append(mesh)
+				
+				elif collection.name.lower() == "walls":
+					objects = collection.objects
+					walls = []
+					
+					for object in objects:
+						if object.type == 'MESH':
+							name, vertices, uvs, faces, material_name, status = read_object(object)
+							wall = [vertices, uvs, material_name]
+						
+						if status == 1:
+							return {'CANCELLED'}
+						
+						walls.append(wall)
+			
+			trk = [cameras, spritelist, meshes, walls]
 			
 		else:
 			print("ERROR: Unknown file extension %s." % (file_extension))
@@ -102,7 +134,7 @@ def main(context, export_path, m):
 		if file_extension == ".z3d":
 			write_z3d(file_path, meshes)
 		elif file_extension == ".trk":
-			write_trk_cameras(file_path, cameras_)
+			write_trk(file_path, trk)
 		
 		elapsed_time = time.time() - writing_time
 		print("\t... %.4fs" % elapsed_time)	
@@ -215,20 +247,111 @@ def write_z3d(file_path, objects):
 	return 0
 
 
-def write_trk_cameras(file_path, cameras):
+def write_trk_road(f, road):
+	vertices, uvs, material_name = walls[i]
+	
+	vertex_data = [vertices, uvs]
+	write_trk_vertex_data(f, vertex_data)
+	
+	f.write(struct.pack('<I', len(material_name)))
+	f.write(material_name)
+	
+	return 0
+
+
+def write_trk_walls(f, walls):
+	num_walls = len(walls)
+	
+	f.write(struct.pack('<I', num_walls))
+	
+	for i in range(0, num_walls):
+		vertices, uvs, material_name = walls[i]
+		
+		vertex_data = [vertices, uvs]
+		write_trk_vertex_data(f, vertex_data)
+		
+		f.write(struct.pack('<I', len(material_name)))
+		f.write(material_name)
+	
+	return 0
+
+
+def write_trk_objects(f, objects):
+	num_objects = len(objects)
+	
+	f.write(struct.pack('<I', num_objects))
+	
+	for i in range(0, num_objects):
+		vertices, uvs, polygons, material_name = objects[i]
+		
+		vertex_data = [vertices, uvs]
+		write_trk_vertex_data(f, vertex_data)
+		
+		num_plgn = len(polygons)
+		f.write(struct.pack('<I', num_plgn))
+		
+		for j in range(0, num_plgn):
+			f.write(struct.pack('<3H', *polygons[j]))
+		
+		f.write(struct.pack('<I', len(material_name)))
+		f.write(material_name)
+	
+	return 0
+
+
+def write_trk_vertex_data(f, vertex_data):
+	vertices, uvs = vertex_data
+	
+	num_vrtx = len(vertices)
+	f.write(struct.pack('<I', num_vrtx))
+	
+	for i in range(0, num_vrtx):
+		f.write(struct.pack('<3f', *vertices[i]))
+	
+	for i in range(0, num_vrtx):
+		f.write(struct.pack('<2f', *uvs[i]))
+	
+	return 0
+
+
+def write_trk_spritelist(f, spritelist):
+	num_spritenames = len(spritelist)
+	
+	f.write(struct.pack('<I', num_spritenames))
+	
+	for i in range(0, num_spritenames):
+		sprite_name = (spritelist[i].encode('ascii'))
+		
+		f.write(struct.pack('<I', len(sprite_name)))
+		f.write(sprite_name)
+	
+	return 0
+
+
+def write_trk_cameras(f, cameras):
+	num_cameras = len(cameras)
+	
+	f.write(struct.pack('<I', num_cameras))
+	
+	for i in range(0, num_cameras):
+		nearest_road_quad, camera_pos = cameras[i]
+		
+		f.write(struct.pack('<I', nearest_road_quad))
+		f.write(struct.pack('<3f', *camera_pos))
+	
+	return 0
+
+
+def write_trk(file_path, trk):
 	os.makedirs(os.path.dirname(file_path), exist_ok = True)
 	
+	cameras, spritelist, objects, walls = trk
+	
 	with open(file_path, "wb") as f:
-		
-		num_cameras = len(cameras)
-		
-		f.write(struct.pack('<I', num_cameras))
-		
-		for i in range(0, num_cameras):
-			nearest_road_quad, camera_pos = cameras[i]
-			
-			f.write(struct.pack('<I', nearest_road_quad))
-			f.write(struct.pack('<3f', *camera_pos))
+		write_trk_cameras(f, cameras)
+		write_trk_spritelist(f, spritelist)
+		write_trk_objects(f, objects)
+		write_trk_walls(f, walls)
 	
 	return 0
 
@@ -266,7 +389,7 @@ class ExportNFSHSPPC(Operator, ExportHelper):
 
 	filter_glob: StringProperty(
 			options={'HIDDEN'},
-			default="*.z3d",
+			default="*.z3d;*.trk",
 			maxlen=255,
 			)
 
@@ -323,7 +446,7 @@ class ExportNFSHSPPC(Operator, ExportHelper):
 def menu_func_export(self, context):
 	pcoll = preview_collections["main"]
 	my_icon = pcoll["my_icon"]
-	self.layout.operator(ExportNFSHSPPC.bl_idname, text="Need for Speed High Stakes Pocket PC (.z3d)", icon_value=my_icon.icon_id)
+	self.layout.operator(ExportNFSHSPPC.bl_idname, text="Need for Speed High Stakes Pocket PC (.z3d, .trk)", icon_value=my_icon.icon_id)
 
 
 classes = (
