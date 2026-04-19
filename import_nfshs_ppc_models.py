@@ -92,6 +92,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 				obj = create_object(name, vertices, uvs, polygons, texture_name)
 				main_collection.objects.link(obj)
 				obj.matrix_world = m
+	
 	elif file_extension == ".trk":
 		cameras_collection = bpy.data.collections.new("Cameras")
 		main_collection.children.link(cameras_collection)
@@ -101,54 +102,77 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		main_collection.children.link(walls_collection)
 		road_collection = bpy.data.collections.new("Road")
 		main_collection.children.link(road_collection)
-		node_collection = bpy.data.collections.new("Nodes")
-		road_collection.children.link(node_collection)
-		sprite_collection = bpy.data.collections.new("Sprites")
-		main_collection.children.link(sprite_collection)
+		nodes_collection = bpy.data.collections.new("Nodes")
+		road_collection.children.link(nodes_collection)
+		sprites_collection = bpy.data.collections.new("Sprites")
+		main_collection.children.link(sprites_collection)
 		navmesh_collection = bpy.data.collections.new("Navmesh")
 		main_collection.children.link(navmesh_collection)
-		for i in range(0, len(trk[0])):
-			nearest_road_quad, camera_pos = trk[0][i]
+		
+		cameras, spritelist, objects, walls, road, navmesh = trk
+		
+		for i in range(0, len(cameras)):
+			nearest_road_quad, camera_pos = cameras[i]
 			camera = bpy.data.objects.new("Camera", None)
+			camera["nearest_road_quad"] = nearest_road_quad
+			camera["camera_index"] = i
 			cameras_collection.objects.link(camera)
 			camera.matrix_world = m @ Matrix.Translation(camera_pos)
-			camera["nearest_road_quad"] = nearest_road_quad
-		for i in range(0, len(trk[2])):
-			vertices, uvs, polygons, texture_name = trk[2][i]
-			if len(vertices) > 0:
-				obj = create_object("Object", vertices, uvs, polygons, texture_name)
-				objects_collection.objects.link(obj)
-				obj.matrix_world = m
-		for i in range(0, len(trk[3])):
-			vertices, uvs, texture_name = trk[3][i]
-			walls_indices = trk[4][i]
-			if len(vertices) > 0:
-				obj = create_object("Wall", vertices, uvs, walls_indices, texture_name)
-				walls_collection.objects.link(obj)
-				obj.matrix_world = m
-		vertices, uvs, polygons, texture_name = trk[5]
+		
+		for i in range(0, len(objects)):
+			vertices, uvs, polygons, texture_name = objects[i]
+			if len(vertices) >= 1:
+				object = create_object("Object", vertices, uvs, polygons, texture_name)
+				object["object_index"] = i
+				objects_collection.objects.link(object)
+				object.matrix_world = m
+		
+		walls_indices = {}
+		quads = road[2]
+		
+		for i in range(0, len(quads)):
+			temp = quads[i][3]
+			
+			for j in range(0, len(temp)):
+				wall_index = temp[j][0]
+				wall_polygon = temp[j][1]
+				
+				if wall_index not in walls_indices:
+					walls_indices[wall_index] = []
+				walls_indices[wall_index].append(wall_polygon)
+		
+		for i in range(0, len(walls)):
+			vertices, uvs, texture_name = walls[i]
+			
+			if len(vertices) >= 1:
+				wall = create_object("Wall", vertices, uvs, walls_indices[i], texture_name)
+				wall["wall_index"] = i
+				walls_collection.objects.link(wall)
+				wall.matrix_world = m
+		
+		vertices, uvs, polygons, texture_name = trk[4]
 		unpacked_polygons = []
 		for i in range(0, len(polygons)):
 			unpacked_polygon = polygons[i][0]
 			unpacked_locator = polygons[i][1]
 			locator_quaternion = polygons[i][2]
-			sprite_positions = polygons[i][4]
+			sprite_positions = polygons[i][5]
 			
 			unpacked_polygons.append(unpacked_polygon)
 			locator = bpy.data.objects.new("Node", None)
 			locator.empty_display_type = 'SINGLE_ARROW'
-			node_collection.objects.link(locator)
+			nodes_collection.objects.link(locator)
 			locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
 			locator.rotation_mode = 'QUATERNION'
 			locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[2], locator_quaternion[0], locator_quaternion[1]]
 		
-		sprite_collection["spritelist"] = trk[1]		
+		sprites_collection["spritelist"] = trk[1]		
 		for i in range(0, len(sprite_positions)):
 			sprite_xyz, sprite_index = sprite_positions[i]
 			
 			sprite_empty = bpy.data.objects.new(trk[1][sprite_index], None)
 			# sprite_empty["sprite_name"] = trk[1][sprite_index]
-			sprite_collection.objects.link(sprite_empty)
+			sprites_collection.objects.link(sprite_empty)
 			sprite_empty.matrix_world = m @ Matrix.Translation(sprite_xyz)
 		
 		if len(vertices) > 0:
@@ -156,7 +180,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			road_collection.objects.link(obj)
 			obj.matrix_world = m
 		
-		navmesh = trk[6]
+		navmesh = trk[5]
 		if len(navmesh) > 0:
 			mesh = bpy.data.meshes.new("Navmesh")
 			obj = bpy.data.objects.new("Navmesh", mesh)
@@ -332,13 +356,13 @@ def read_trk(file_path):
 		quads = {}
 		sprites = []
 		
-		polygon_indices = {}
-		
 		vertices, uvs = read_trk_vertex_data(f)
 		
 		num_quad = struct.unpack('<I', f.read(0x4))[0]
 		
 		for i in range(0, num_quad):
+			walls_indices = []
+			
 			quad_indices = struct.unpack('<4H', f.read(0x8))
 			quad_center = struct.unpack('<3f', f.read(0xC))
 			quad_quaternion = struct.unpack('<4f', f.read(0x10))
@@ -346,10 +370,9 @@ def read_trk(file_path):
 			num_plgn = struct.unpack('<I', f.read(0x4))[0]
 			for j in range(0, num_plgn):
 				wall_index = struct.unpack('<I', f.read(0x4))[0]
-				polygon = struct.unpack('<3H', f.read(0x6))
-				if wall_index not in polygon_indices:
-					polygon_indices[wall_index] = []
-				polygon_indices[wall_index].append(polygon)
+				wall_polygon = struct.unpack('<3H', f.read(0x6))
+				
+				walls_indices.append([wall_index, wall_polygon])
 			
 			num_unknown = struct.unpack('<I', f.read(0x4))[0]
 			rendered_objects = []
@@ -370,7 +393,7 @@ def read_trk(file_path):
 				
 				sprites.append([sprite_position, sprite_index])
 				
-			quads[i] = [quad_indices, quad_center, quad_quaternion, rendered_objects, sprites]
+			quads[i] = [quad_indices, quad_center, quad_quaternion, walls_indices, rendered_objects, sprites]
 		
 		texture_length = struct.unpack('<I', f.read(0x4))[0]
 		texture_name = f.read(texture_length)
@@ -382,7 +405,7 @@ def read_trk(file_path):
 			navmesh_vertex = struct.unpack('<3f', f.read(0xC))
 			navmesh.append(navmesh_vertex)
 	
-	trk = [cameras, spritelist, objects, walls, polygon_indices, road, navmesh]
+	trk = [cameras, spritelist, objects, walls, road, navmesh]
 	
 	return trk
 
