@@ -104,9 +104,9 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		node_collection = bpy.data.collections.new("Nodes")
 		road_collection.children.link(node_collection)
 		sprite_collection = bpy.data.collections.new("Sprites")
-		road_collection.children.link(sprite_collection)
-		minimap_collection = bpy.data.collections.new("Minimap")
-		main_collection.children.link(minimap_collection)
+		main_collection.children.link(sprite_collection)
+		navmesh_collection = bpy.data.collections.new("Navmesh")
+		main_collection.children.link(navmesh_collection)
 		for i in range(0, len(trk[0])):
 			nearest_road_quad, camera_pos = trk[0][i]
 			camera = bpy.data.objects.new("Camera", None)
@@ -132,7 +132,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			unpacked_polygon = polygons[i][0]
 			unpacked_locator = polygons[i][1]
 			locator_quaternion = polygons[i][2]
-			sprite_positions = polygons[i][3]
+			sprite_positions = polygons[i][4]
 			
 			unpacked_polygons.append(unpacked_polygon)
 			locator = bpy.data.objects.new("Node", None)
@@ -141,7 +141,8 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
 			locator.rotation_mode = 'QUATERNION'
 			locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[2], locator_quaternion[0], locator_quaternion[1]]
-			
+		
+		sprite_collection["spritelist"] = trk[1]		
 		for i in range(0, len(sprite_positions)):
 			sprite_xyz, sprite_index = sprite_positions[i]
 			
@@ -155,12 +156,12 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			road_collection.objects.link(obj)
 			obj.matrix_world = m
 		
-		minimap = trk[6]
-		if len(minimap) > 0:
-			mesh = bpy.data.meshes.new("Minimap")
-			obj = bpy.data.objects.new("Minimap", mesh)
-			mesh.from_pydata(minimap, [], [])
-			minimap_collection.objects.link(obj)
+		navmesh = trk[6]
+		if len(navmesh) > 0:
+			mesh = bpy.data.meshes.new("Navmesh")
+			obj = bpy.data.objects.new("Navmesh", mesh)
+			mesh.from_pydata(navmesh, [], [])
+			navmesh_collection.objects.link(obj)
 			obj.matrix_world = m
 	
 	elapsed_time = time.time() - importing_time
@@ -292,15 +293,16 @@ def read_trk_vertex_data(f):
 
 
 def read_trk_spritelist(f):
-	spritelist = {}
+	spritelist = []
 	
 	num_spritenames = struct.unpack('<I', f.read(0x4))[0]
 	
 	for i in range(0, num_spritenames):
 		sprite_name_length = struct.unpack('<I', f.read(0x4))[0]
 		sprite_name = f.read(sprite_name_length)
+		sprite_name = str(sprite_name, 'ascii')
 		
-		spritelist[i] = str(sprite_name, 'ascii')
+		spritelist.append(sprite_name)
 	
 	return spritelist
 
@@ -350,8 +352,16 @@ def read_trk(file_path):
 				polygon_indices[wall_index].append(polygon)
 			
 			num_unknown = struct.unpack('<I', f.read(0x4))[0]
-			for j in range (0, num_unknown):
-				unknown = struct.unpack('<I', f.read(0x4))[0]
+			rendered_objects = []
+			if num_unknown >= 1:
+				#print("quad_index:", i) 
+				#print("num_unknown:", num_unknown)
+				
+				for j in range (0, num_unknown):
+					unknown = struct.unpack('<I', f.read(0x4))[0]
+					rendered_objects.append(unknown)
+					
+					#print("unknown:", unknown)
 			
 			num_sprites = struct.unpack('<I', f.read(0x4))[0]
 			for j in range(0, num_sprites):
@@ -360,19 +370,19 @@ def read_trk(file_path):
 				
 				sprites.append([sprite_position, sprite_index])
 				
-			quads[i] = [quad_indices, quad_center, quad_quaternion, sprites]
+			quads[i] = [quad_indices, quad_center, quad_quaternion, rendered_objects, sprites]
 		
 		texture_length = struct.unpack('<I', f.read(0x4))[0]
 		texture_name = f.read(texture_length)
 		
 		road = [vertices, uvs, quads, texture_name]
 		
-		minimap = []
+		navmesh = []
 		for i in range(0, (num_quad*2)):
-			minimap_vertex = struct.unpack('<3f', f.read(0xC))
-			minimap.append(minimap_vertex)
+			navmesh_vertex = struct.unpack('<3f', f.read(0xC))
+			navmesh.append(navmesh_vertex)
 	
-	trk = [cameras, spritelist, objects, walls, polygon_indices, road, minimap]
+	trk = [cameras, spritelist, objects, walls, polygon_indices, road, navmesh]
 	
 	return trk
 
