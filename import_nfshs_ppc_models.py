@@ -89,7 +89,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		for i in range(0, len(objects)):
 			name, vertices, uvs, polygons, texture_name = objects[i]
 			if len(vertices) > 0:
-				obj = create_object(name, vertices, uvs, polygons, texture_name, False)
+				obj = create_object(name, vertices, uvs, polygons, texture_name, False, False)
 				obj["object_index"] = i
 				main_collection.objects.link(obj)
 				obj.matrix_world = m
@@ -150,7 +150,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		for i in range(0, len(objects)):
 			vertices, uvs, polygons, texture_name = objects[i]
 			if len(vertices) >= 1:
-				object = create_object("Object", vertices, uvs, polygons, texture_name, False)
+				object = create_object("Object", vertices, uvs, polygons, texture_name, True, False)
 				object["object_index"] = i
 				if i in objects_nearest_quads:
 					object["nearest_quad"] = objects_nearest_quads[i]
@@ -161,7 +161,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			vertices, uvs, texture_name = walls[i]
 			
 			if len(vertices) >= 1:
-				wall = create_object("Wall", vertices, uvs, walls_indices[i], texture_name, True)
+				wall = create_object("Wall", vertices, uvs, walls_indices[i], texture_name, True, True)
 				wall["wall_index"] = i
 				walls_collection.objects.link(wall)
 				wall.matrix_world = m
@@ -198,7 +198,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 				sprite_empty.matrix_world = m @ Matrix.Translation(sprite_pos)
 		
 		if len(vertices) > 0:
-			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name, False)
+			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name, True, False)
 			road_collection.objects.link(obj)
 			obj.matrix_world = m
 		
@@ -434,7 +434,7 @@ def read_trk(file_path):
 	return trk
 
 
-def create_object(name, vertices, uvs, faces, texture_name, additional_data):
+def create_object(name, vertices, uvs, faces, texture_name, flip_uv, additional_data):
 	#==================================================================================================
 	#Building Mesh
 	#==================================================================================================
@@ -490,7 +490,12 @@ def create_object(name, vertices, uvs, faces, texture_name, additional_data):
 		
 		if has_uv == True:
 			for loop, uv in zip(BMFace.loops, face_uvs):
-				loop[uv_layer].uv = uv
+				if flip_uv == True:
+					u, v = uv
+					uv = u, -v + 1.0
+					loop[uv_layer].uv = uv
+				else:
+					loop[uv_layer].uv = uv
 	
 	material_name = str(texture_name, 'ascii')
 	mat = bpy.data.materials.get(material_name)
