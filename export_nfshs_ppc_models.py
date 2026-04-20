@@ -62,17 +62,25 @@ def main(context, export_path, m):
 		
 		if file_extension == ".z3d":
 			objects = main_collection.objects
-			meshes = []
+			object_index = -1
+			
+			Z3D_Objects = []
 			
 			for object in objects:
 				if object.type == 'MESH':
+					try:
+						object_index = object["object_index"]
+					except:
+						object_index = object_index + 1
+					
 					name, vertices, uvs, faces, material_name, status = read_object(object)
-					mesh = [name, vertices, uvs, faces, material_name]
+					
+					if status == 1:
+						return {'CANCELLED'}
 				
-				if status == 1:
-					return {'CANCELLED'}
-				
-				meshes.append(mesh)
+				Z3D_Objects.append([object_index, [name, vertices, uvs, faces, material_name]])
+			
+			Z3D_Objects.sort(key=lambda x:x[0])
 		
 		elif file_extension == ".trk":
 			print("Experimental .trk export requires adding the rest of data with a hex editor.")
@@ -132,7 +140,7 @@ def main(context, export_path, m):
 		writing_time = time.time()
 		
 		if file_extension == ".z3d":
-			write_z3d(file_path, meshes)
+			write_z3d(file_path, Z3D_Objects)
 		elif file_extension == ".trk":
 			write_trk(file_path, trk)
 		
@@ -163,7 +171,8 @@ def read_object(object):
 	
 	for vert in bm.verts:
 		if vert.hide == False:
-			vertices.append([vert_co for i, vert_co in enumerate(vert.co)])
+			x, y, z = vert.co
+			vertices.append([x, y*4, -z])
 			vertices_list[vert.index] = vert_ind
 			vert_ind += 1
 	
@@ -187,7 +196,7 @@ def read_object(object):
 		
 		vertexId0, vertexId1, vertexId2 = vertexIds
 		
-		faces.append([vertexId0, vertexId1, vertexId2])
+		faces.append([vertexId0, vertexId2, vertexId1])
 	
 	material_name = (mesh.materials[0].name).encode('ascii')
 	
@@ -209,7 +218,7 @@ def write_z3d(file_path, objects):
 		f.write(struct.pack('<I', num_meshes))
 		
 		for i in range(0, num_meshes):
-			name, vertices, uvs, polygons, material_name = objects[i]
+			name, vertices, uvs, polygons, material_name = objects[i][1]
 			
 			if len(uvs) != 0:
 				has_uv = True
