@@ -89,7 +89,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		for i in range(0, len(objects)):
 			name, vertices, uvs, polygons, texture_name = objects[i]
 			if len(vertices) > 0:
-				obj = create_object(name, vertices, uvs, polygons, texture_name)
+				obj = create_object(name, vertices, uvs, polygons, texture_name, False)
 				main_collection.objects.link(obj)
 				obj.matrix_world = m
 	
@@ -119,19 +119,13 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			cameras_collection.objects.link(camera)
 			camera.matrix_world = m @ Matrix.Translation(camera_pos)
 		
-		for i in range(0, len(objects)):
-			vertices, uvs, polygons, texture_name = objects[i]
-			if len(vertices) >= 1:
-				object = create_object("Object", vertices, uvs, polygons, texture_name)
-				object["object_index"] = i
-				objects_collection.objects.link(object)
-				object.matrix_world = m
-		
 		walls_indices = {}
+		rendered_objects = {}
 		quads = road[2]
 		
 		for i in range(0, len(quads)):
 			temp = quads[i][3]
+			temp2 = quads[i][4]
 			
 			for j in range(0, len(temp)):
 				wall_index = temp[j][0]
@@ -139,13 +133,30 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 				
 				if wall_index not in walls_indices:
 					walls_indices[wall_index] = []
-				walls_indices[wall_index].append(wall_polygon)
+				walls_indices[wall_index].append([i, wall_polygon])
+			
+			for j in range(0, len(temp2)):
+				rendered_object = temp2[j]
+				
+				if rendered_object not in rendered_objects:
+					rendered_objects[rendered_object] = []
+				rendered_objects[rendered_object].append(i)	
+		
+		for i in range(0, len(objects)):
+			vertices, uvs, polygons, texture_name = objects[i]
+			if len(vertices) >= 1:
+				object = create_object("Object", vertices, uvs, polygons, texture_name, False)
+				object["object_index"] = i
+				if i in rendered_objects:
+					object["nearest_quad"] = rendered_objects[i]
+				objects_collection.objects.link(object)
+				object.matrix_world = m
 		
 		for i in range(0, len(walls)):
 			vertices, uvs, texture_name = walls[i]
 			
 			if len(vertices) >= 1:
-				wall = create_object("Wall", vertices, uvs, walls_indices[i], texture_name)
+				wall = create_object("Wall", vertices, uvs, walls_indices[i], texture_name, True)
 				wall["wall_index"] = i
 				walls_collection.objects.link(wall)
 				wall.matrix_world = m
@@ -176,7 +187,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			sprite_empty.matrix_world = m @ Matrix.Translation(sprite_xyz)
 		
 		if len(vertices) > 0:
-			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name)
+			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name, False)
 			road_collection.objects.link(obj)
 			obj.matrix_world = m
 		
@@ -410,7 +421,7 @@ def read_trk(file_path):
 	return trk
 
 
-def create_object(name, vertices, uvs, faces, texture_name):
+def create_object(name, vertices, uvs, faces, texture_name, additional_data):
 	#==================================================================================================
 	#Building Mesh
 	#==================================================================================================
@@ -419,6 +430,10 @@ def create_object(name, vertices, uvs, faces, texture_name):
 	
 	#Get a BMesh representation
 	bm = bmesh.new()
+	
+	#Creating new properties
+	if additional_data == True:
+		flag = (bm.faces.layers.int.get("flag") or bm.faces.layers.int.new('flag'))
 	
 	BMVert_dictionary = {}
 	
@@ -435,6 +450,10 @@ def create_object(name, vertices, uvs, faces, texture_name):
 		BMVert_dictionary[i] = BMVert
 	
 	for i, face in enumerate(faces):
+		if additional_data == True:
+			nearest_quad = face[0]
+			face = face[1]
+		
 		if len(face) == 4:
 			face_vertices = [BMVert_dictionary[face[3]], BMVert_dictionary[face[2]], BMVert_dictionary[face[0]], BMVert_dictionary[face[1]]]
 			if has_uv == True:
@@ -450,6 +469,8 @@ def create_object(name, vertices, uvs, faces, texture_name):
 		if BMFace.index != -1:
 			BMFace = BMFace.copy(verts=False, edges=False)
 		BMFace.index = i
+		if additional_data == True:
+			BMFace[flag] = nearest_quad
 		
 		if has_uv == True:
 			for loop, uv in zip(BMFace.loops, face_uvs):
