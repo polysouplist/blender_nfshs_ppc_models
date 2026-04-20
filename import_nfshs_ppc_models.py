@@ -90,6 +90,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			name, vertices, uvs, polygons, texture_name = objects[i]
 			if len(vertices) > 0:
 				obj = create_object(name, vertices, uvs, polygons, texture_name, False)
+				obj["object_index"] = i
 				main_collection.objects.link(obj)
 				obj.matrix_world = m
 	
@@ -113,19 +114,23 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		
 		for i in range(0, len(cameras)):
 			nearest_road_quad, camera_pos = cameras[i]
+			x, y, z = camera_pos
+			camera_pos = x, y*0.25, -z
+			
 			camera = bpy.data.objects.new("Camera", None)
-			camera["nearest_road_quad"] = nearest_road_quad
+			camera["nearest_quad"] = nearest_road_quad
 			camera["camera_index"] = i
 			cameras_collection.objects.link(camera)
 			camera.matrix_world = m @ Matrix.Translation(camera_pos)
 		
 		walls_indices = {}
-		rendered_objects = {}
+		objects_nearest_quads = {}
 		quads = road[2]
 		
 		for i in range(0, len(quads)):
 			temp = quads[i][3]
 			temp2 = quads[i][4]
+			temp3 = quads[i][5]
 			
 			for j in range(0, len(temp)):
 				wall_index = temp[j][0]
@@ -138,17 +143,17 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			for j in range(0, len(temp2)):
 				rendered_object = temp2[j]
 				
-				if rendered_object not in rendered_objects:
-					rendered_objects[rendered_object] = []
-				rendered_objects[rendered_object].append(i)	
+				if rendered_object not in objects_nearest_quads:
+					objects_nearest_quads[rendered_object] = []
+				objects_nearest_quads[rendered_object].append(i)
 		
 		for i in range(0, len(objects)):
 			vertices, uvs, polygons, texture_name = objects[i]
 			if len(vertices) >= 1:
 				object = create_object("Object", vertices, uvs, polygons, texture_name, False)
 				object["object_index"] = i
-				if i in rendered_objects:
-					object["nearest_quad"] = rendered_objects[i]
+				if i in objects_nearest_quads:
+					object["nearest_quad"] = objects_nearest_quads[i]
 				objects_collection.objects.link(object)
 				object.matrix_world = m
 		
@@ -166,6 +171,8 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		for i in range(0, len(polygons)):
 			unpacked_polygon = polygons[i][0]
 			unpacked_locator = polygons[i][1]
+			x, y, z = unpacked_locator
+			unpacked_locator = x, y*0.25, -z
 			locator_quaternion = polygons[i][2]
 			sprite_positions = polygons[i][5]
 			
@@ -175,16 +182,20 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			nodes_collection.objects.link(locator)
 			locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
 			locator.rotation_mode = 'QUATERNION'
-			locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[2], locator_quaternion[0], locator_quaternion[1]]
-		
-		sprites_collection["spritelist"] = trk[1]		
-		for i in range(0, len(sprite_positions)):
-			sprite_xyz, sprite_index = sprite_positions[i]
+			locator.rotation_quaternion = [locator_quaternion[2], locator_quaternion[0], locator_quaternion[1], locator_quaternion[3]]
 			
-			sprite_empty = bpy.data.objects.new(trk[1][sprite_index], None)
-			# sprite_empty["sprite_name"] = trk[1][sprite_index]
-			sprites_collection.objects.link(sprite_empty)
-			sprite_empty.matrix_world = m @ Matrix.Translation(sprite_xyz)
+			sprites_collection["spritelist"] = trk[1]		
+			for j in range(0, len(sprite_positions)):
+				sprite_pos, sprite_index = sprite_positions[j]
+				x, y, z = sprite_pos
+				sprite_pos = x, y*0.25, -z
+				
+				sprite_empty = bpy.data.objects.new(trk[1][sprite_index], None)
+				sprite_empty["sprite_index"] = sprite_index
+				sprite_empty["nearest_quad"] = i
+				
+				sprites_collection.objects.link(sprite_empty)
+				sprite_empty.matrix_world = m @ Matrix.Translation(sprite_pos)
 		
 		if len(vertices) > 0:
 			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name, False)
@@ -365,7 +376,6 @@ def read_trk(file_path):
 		walls = read_trk_walls(f)
 		
 		quads = {}
-		sprites = []
 		
 		vertices, uvs = read_trk_vertex_data(f)
 		
@@ -373,6 +383,7 @@ def read_trk(file_path):
 		
 		for i in range(0, num_quad):
 			walls_indices = []
+			sprites = []
 			
 			quad_indices = struct.unpack('<4H', f.read(0x8))
 			quad_center = struct.unpack('<3f', f.read(0xC))
@@ -414,6 +425,8 @@ def read_trk(file_path):
 		navmesh = []
 		for i in range(0, (num_quad*2)):
 			navmesh_vertex = struct.unpack('<3f', f.read(0xC))
+			x, y, z = navmesh_vertex
+			navmesh_vertex = x, y*0.25, -z
 			navmesh.append(navmesh_vertex)
 	
 	trk = [cameras, spritelist, objects, walls, road, navmesh]
@@ -445,6 +458,9 @@ def create_object(name, vertices, uvs, faces, texture_name, additional_data):
 		has_uv = False
 	
 	for i, position in enumerate(vertices):
+		x, y, z = position
+		position = x, y*0.25, -z
+		
 		BMVert = bm.verts.new(position)
 		BMVert.index = i
 		BMVert_dictionary[i] = BMVert
@@ -455,13 +471,13 @@ def create_object(name, vertices, uvs, faces, texture_name, additional_data):
 			face = face[1]
 		
 		if len(face) == 4:
-			face_vertices = [BMVert_dictionary[face[3]], BMVert_dictionary[face[2]], BMVert_dictionary[face[0]], BMVert_dictionary[face[1]]]
+			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[2]], BMVert_dictionary[face[3]], BMVert_dictionary[face[1]]]
 			if has_uv == True:
-				face_uvs = [uvs[face[3]], uvs[face[2]], uvs[face[0]], uvs[face[1]]]
+				face_uvs = [uvs[face[0]], uvs[face[2]], uvs[face[3]], uvs[face[1]]]
 		else:
-			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[1]], BMVert_dictionary[face[2]]]
+			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[2]], BMVert_dictionary[face[1]]]
 			if has_uv == True:
-				face_uvs = [uvs[face[0]], uvs[face[1]], uvs[face[2]]]
+				face_uvs = [uvs[face[0]], uvs[face[2]], uvs[face[1]]]
 		try:
 			BMFace = bm.faces.get(face_vertices) or bm.faces.new(face_vertices)
 		except:
