@@ -104,7 +104,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		road_collection = bpy.data.collections.new("Road")
 		main_collection.children.link(road_collection)
 		nodes_collection = bpy.data.collections.new("Nodes")
-		road_collection.children.link(nodes_collection)
+		main_collection.children.link(nodes_collection)
 		sprites_collection = bpy.data.collections.new("Sprites")
 		main_collection.children.link(sprites_collection)
 		navmesh_collection = bpy.data.collections.new("Navmesh")
@@ -407,10 +407,10 @@ def read_trk(file_path):
 			
 			num_sprites = struct.unpack('<I', f.read(0x4))[0]
 			for j in range(0, num_sprites):
-				sprite_position = struct.unpack('<3f', f.read(0xC))
+				sprite_pos = struct.unpack('<3f', f.read(0xC))
 				sprite_index = struct.unpack('<I', f.read(0x4))[0]
 				
-				sprites.append([sprite_position, sprite_index])
+				sprites.append([sprite_pos, sprite_index])
 				
 			quads[i] = [quad_indices, quad_center, quad_quaternion, walls_indices, rendered_objects, sprites]
 		
@@ -466,9 +466,9 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 			face = face[1]
 		
 		if len(face) == 4:
-			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[2]], BMVert_dictionary[face[3]], BMVert_dictionary[face[1]]]
+			face_vertices = [BMVert_dictionary[face[3]], BMVert_dictionary[face[1]], BMVert_dictionary[face[0]], BMVert_dictionary[face[2]]]
 			if has_uv == True:
-				face_uvs = [uvs[face[0]], uvs[face[2]], uvs[face[3]], uvs[face[1]]]
+				face_uvs = [uvs[face[3]], uvs[face[1]], uvs[face[0]], uvs[face[2]]]
 		else:
 			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[2]], BMVert_dictionary[face[1]]]
 			if has_uv == True:
