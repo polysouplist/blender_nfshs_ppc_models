@@ -201,7 +201,7 @@ def main(context, export_path, m):
 					if status == 1:
 						return {'CANCELLED'}
 					
-					TRK_Road = [vertices, uvs, faces, material_name, Quad_Walls]
+					TRK_Road = [vertices, uvs, faces, material_name, Quad_Walls, Quad_Objects]
 					
 			
 			#print(Quad_Sprites)
@@ -354,7 +354,7 @@ def write_z3d(file_path, objects):
 
 
 def write_trk_road(f, road):
-	vertices, uvs, quads, material_name, Quad_Walls = road
+	vertices, uvs, quads, material_name, Quad_Walls, Quad_Objects = road
 	
 	vertex_data = [vertices, uvs]
 	write_trk_vertex_data(f, vertex_data)
@@ -378,6 +378,15 @@ def write_trk_road(f, road):
 			
 			f.write(struct.pack('<I', wall_index))
 			f.write(struct.pack('<3H', *wall_polygon))
+		
+		try:
+			child_objects = Quad_Objects[i]
+			num_objects = len(child_objects)
+			print("num_objects:", num_objects)
+			for j in range(0, num_objects):
+				print("child_object:", child_objects[j])
+		except:
+			pass
 		
 		f.write(struct.pack('<I', 0))
 		f.write(struct.pack('<I', 0))
