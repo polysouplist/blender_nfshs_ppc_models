@@ -113,12 +113,11 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		cameras, spritelist, objects, walls, road, navmesh = trk
 		
 		for i in range(0, len(cameras)):
-			nearest_road_quad, camera_pos = cameras[i]
-			x, y, z = camera_pos
-			camera_pos = x, y*0.25, -z
+			nearest_quad, camera_pos = cameras[i]
+			camera_pos = scale_position(camera_pos)
 			
 			camera = bpy.data.objects.new("Camera", None)
-			camera["nearest_quad"] = nearest_road_quad
+			camera["nearest_quad"] = nearest_quad
 			camera["camera_index"] = i
 			cameras_collection.objects.link(camera)
 			camera.matrix_world = m @ Matrix.Translation(camera_pos)
@@ -171,8 +170,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		for i in range(0, len(polygons)):
 			unpacked_polygon = polygons[i][0]
 			unpacked_locator = polygons[i][1]
-			x, y, z = unpacked_locator
-			unpacked_locator = x, y*0.25, -z
+			unpacked_locator = scale_position(unpacked_locator)
 			locator_quaternion = polygons[i][2]
 			sprite_positions = polygons[i][5]
 			
@@ -187,8 +185,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			sprites_collection["spritelist"] = trk[1]		
 			for j in range(0, len(sprite_positions)):
 				sprite_pos, sprite_index = sprite_positions[j]
-				x, y, z = sprite_pos
-				sprite_pos = x, y*0.25, -z
+				sprite_pos = scale_position(sprite_pos)
 				
 				sprite_empty = bpy.data.objects.new(trk[1][sprite_index], None)
 				sprite_empty["sprite_index"] = sprite_index
@@ -359,9 +356,9 @@ def read_trk_cameras(f):
 	num_cameras = struct.unpack('<I', f.read(0x4))[0]
 	
 	for i in range(0, num_cameras):
-		nearest_road_quad = struct.unpack('<I', f.read(0x4))[0]
+		nearest_quad = struct.unpack('<I', f.read(0x4))[0]
 		camera_pos = struct.unpack('<3f', f.read(0xC))
-		cameras[i] = [nearest_road_quad, camera_pos]
+		cameras[i] = [nearest_quad, camera_pos]
 	
 	return cameras
 
@@ -425,8 +422,7 @@ def read_trk(file_path):
 		navmesh = []
 		for i in range(0, (num_quad*2)):
 			navmesh_vertex = struct.unpack('<3f', f.read(0xC))
-			x, y, z = navmesh_vertex
-			navmesh_vertex = x, y*0.25, -z
+			navmesh_vertex = scale_position(navmesh_vertex)
 			navmesh.append(navmesh_vertex)
 	
 	trk = [cameras, spritelist, objects, walls, road, navmesh]
@@ -434,7 +430,7 @@ def read_trk(file_path):
 	return trk
 
 
-def create_object(name, vertices, uvs, faces, texture_name, flip_uv, additional_data):
+def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, additional_data):
 	#==================================================================================================
 	#Building Mesh
 	#==================================================================================================
@@ -458,8 +454,7 @@ def create_object(name, vertices, uvs, faces, texture_name, flip_uv, additional_
 		has_uv = False
 	
 	for i, position in enumerate(vertices):
-		x, y, z = position
-		position = x, y*0.25, -z
+		position = scale_position(position)
 		
 		BMVert = bm.verts.new(position)
 		BMVert.index = i
@@ -491,8 +486,7 @@ def create_object(name, vertices, uvs, faces, texture_name, flip_uv, additional_
 		if has_uv == True:
 			for loop, uv in zip(BMFace.loops, face_uvs):
 				if flip_uv == True:
-					u, v = uv
-					uv = u, -v + 1.0
+					uv = flip_uv(uv)
 					loop[uv_layer].uv = uv
 				else:
 					loop[uv_layer].uv = uv
@@ -515,6 +509,20 @@ def create_object(name, vertices, uvs, faces, texture_name, flip_uv, additional_
 	bm.free()
 	
 	return obj
+
+
+def scale_position(position):
+	x, y, z = position
+	position = x, y*0.25, -z
+	
+	return position
+
+
+def flip_uv(uv):
+	u, v = uv
+	uv = u, -v + 1.0
+	
+	return uv
 
 
 def clearScene(context): # OK
