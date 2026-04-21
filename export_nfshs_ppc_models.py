@@ -85,6 +85,10 @@ def main(context, export_path, m):
 		elif file_extension == ".trk":
 			print("Experimental .trk export requires adding the rest of data with a hex editor.")
 			
+			Quad_Sprites = {}
+			Quad_Objects = {}
+			Quad_Walls = {}
+			
 			for collection in main_collection.children:
 				if collection.name.lower() == "cameras":
 					cameras = collection.objects
@@ -108,6 +112,23 @@ def main(context, export_path, m):
 				
 				elif collection.name.lower() == "sprites":
 					TRK_SpriteList = collection["spritelist"]
+					
+					sprites = collection.objects
+					
+					for sprite in sprites:
+						if sprite.type == 'EMPTY':
+							try:
+								nearest_quad = sprite["nearest_quad"]
+							except:
+								pass
+							sprite_index = sprite["sprite_index"]
+							sprite_pos = Matrix(np.linalg.inv(m) @ sprite.matrix_world)
+							sprite_pos = sprite_pos.to_translation()
+							sprite_pos = scale_position(sprite_pos)
+							
+							if nearest_quad not in Quad_Sprites:
+								Quad_Sprites[nearest_quad] = []
+							Quad_Sprites[nearest_quad].append([sprite_pos, sprite_index])
 				
 				elif collection.name.lower() == "objects":
 					objects = collection.objects
@@ -122,7 +143,16 @@ def main(context, export_path, m):
 							except:
 								object_index = object_index + 1
 							
-							name, vertices, uvs, faces, material_name, status = read_object(object, True)
+							try:
+								nearest_quad = object["nearest_quad"]
+								for i in nearest_quad:
+									if i not in Quad_Objects:
+										Quad_Objects[i] = []
+									Quad_Objects[i].append(object_index)
+							except:
+								pass
+							
+							name, vertices, uvs, faces, material_name, status = read_object(object, False)
 							
 							if status == 1:
 								return {'CANCELLED'}
@@ -146,14 +176,38 @@ def main(context, export_path, m):
 							
 							name, vertices, uvs, faces, material_name, status = read_object(wall, True)
 							
+							for face in faces:
+								nearest_quad = face[0]
+								wall_polygon = face[1]
+								
+								if nearest_quad not in Quad_Walls:
+									Quad_Walls[nearest_quad] = []
+								
+								Quad_Walls[nearest_quad].append([wall_index, wall_polygon])
+							
 							if status == 1:
 								return {'CANCELLED'}
 							
 							TRK_Walls.append([wall_index, [vertices, uvs, material_name]])
 					
 					TRK_Walls.sort(key=lambda x:x[0])
+				
+				elif collection.name.lower() == "road":
+					roads = collection.objects
+					road = roads[0]
+					
+					name, vertices, uvs, faces, material_name, status = read_object(road, False)
+					
+					if status == 1:
+						return {'CANCELLED'}
+					
+					TRK_Road = [vertices, uvs, faces, material_name, Quad_Walls]
+					
 			
-			trk = [TRK_Cameras, TRK_SpriteList, TRK_Objects, TRK_Walls]
+			#print(Quad_Sprites)
+			#print(Quad_Objects)
+			#print(Quad_Walls)
+			trk = [TRK_Cameras, TRK_SpriteList, TRK_Objects, TRK_Walls, TRK_Road]
 		
 		else:
 			print("ERROR: Unknown file extension %s." % (file_extension))
@@ -178,7 +232,7 @@ def main(context, export_path, m):
 	return {'FINISHED'}
 
 
-def read_object(object, flipped_uv):
+def read_object(object, additional_data):
 	vertices = []
 	faces = []
 	uvs = {}
@@ -206,6 +260,9 @@ def read_object(object, flipped_uv):
 	except:
 		has_uv = False
 	
+	if additional_data == True:
+		nearest_quads = mesh.attributes.get("flag")
+	
 	for face in mesh.polygons:
 		if face.hide == True:
 			continue
@@ -216,14 +273,27 @@ def read_object(object, flipped_uv):
 			vertexIds.append(vert_index)
 			if has_uv == True:
 				if vert_index not in uvs:
-					if flipped_uv == True:
-						uvs[vert_index] = flip_uv(uv_layer[loop_ind].uv)
-					else:
-						uvs[vert_index] = uv_layer[loop_ind].uv
+					uvs[vert_index] = uv_layer[loop_ind].uv
 		
-		vertexId0, vertexId1, vertexId2 = vertexIds
+		if additional_data == True:
+			try:
+				nearest_quad = nearest_quads.data[face.index].value
+			except:
+				pass
 		
-		faces.append([vertexId0, vertexId2, vertexId1])
+		if len(vertexIds) == 3:
+			vertexId0, vertexId1, vertexId2 = vertexIds
+		elif len(vertexIds) == 4:
+			vertexId0, vertexId1, vertexId2, vertexId3 = vertexIds
+		
+		if additional_data == True:
+			faces.append([nearest_quad, [vertexId0, vertexId2, vertexId1]])
+		else:
+			if len(vertexIds) == 4:
+				face_center = scale_position(face.center)
+				faces.append([face_center, [vertexId2, vertexId1, vertexId3, vertexId0]])
+			else:	
+				faces.append([vertexId0, vertexId2, vertexId1])
 	
 	material_name = (mesh.materials[0].name).encode('ascii')
 	
@@ -284,13 +354,39 @@ def write_z3d(file_path, objects):
 
 
 def write_trk_road(f, road):
-	vertices, uvs, material_name = walls[i][1]
+	vertices, uvs, quads, material_name, Quad_Walls = road
 	
 	vertex_data = [vertices, uvs]
 	write_trk_vertex_data(f, vertex_data)
 	
+	num_quads = len(quads)
+	
+	f.write(struct.pack('<I', num_quads))
+	
+	for i in range(0, num_quads):
+		f.write(struct.pack('<4H', *quads[i][1]))
+		f.write(struct.pack('<3f', *quads[i][0]))
+		f.write(struct.pack('<4f', 0.0, 0.0, 0.0, 0.0))
+		
+		num_plgn = len(Quad_Walls[i])
+		polygons = Quad_Walls[i]
+		f.write(struct.pack('<I', num_plgn))
+		
+		for j in range(0, num_plgn):
+			wall_index = polygons[j][0]
+			wall_polygon = polygons[j][1]
+			
+			f.write(struct.pack('<I', wall_index))
+			f.write(struct.pack('<3H', *wall_polygon))
+		
+		f.write(struct.pack('<I', 0))
+		f.write(struct.pack('<I', 0))
+	
 	f.write(struct.pack('<I', len(material_name)))
 	f.write(material_name)
+	
+	for i in range(0, num_quads*2):
+		f.write(struct.pack('<3f', 0.0, 0.0, 0.0))
 	
 	return 0
 
@@ -381,13 +477,14 @@ def write_trk_cameras(f, cameras):
 def write_trk(file_path, trk):
 	os.makedirs(os.path.dirname(file_path), exist_ok = True)
 	
-	cameras, spritelist, objects, walls = trk
+	cameras, spritelist, objects, walls, road = trk
 	
 	with open(file_path, "wb") as f:
 		write_trk_cameras(f, cameras)
 		write_trk_spritelist(f, spritelist)
 		write_trk_objects(f, objects)
 		write_trk_walls(f, walls)
+		write_trk_road(f, road)
 	
 	return 0
 
@@ -397,13 +494,6 @@ def scale_position(position):
 	position = x, y*4, -z
 	
 	return position
-
-
-def flip_uv(uv):
-	u, v = uv
-	uv = u, -v - 1.0
-	
-	return uv
 
 
 def id_to_bytes(id):
