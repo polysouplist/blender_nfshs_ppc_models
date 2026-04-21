@@ -85,6 +85,11 @@ def main(context, export_path, m):
 		elif file_extension == ".trk":
 			print("Experimental .trk export requires adding the rest of data with a hex editor.")
 			
+			TRK_Cameras = []
+			TRK_Objects = []
+			TRK_Walls = []
+			TRK_NavMesh = []
+			
 			Quad_Sprites = {}
 			Quad_Objects = {}
 			Quad_Walls = {}
@@ -92,7 +97,6 @@ def main(context, export_path, m):
 			for collection in main_collection.children:
 				if collection.name.lower() == "cameras":
 					cameras = collection.objects
-					TRK_Cameras = []
 					
 					for camera in cameras:
 						if camera.type == 'EMPTY':
@@ -107,8 +111,6 @@ def main(context, export_path, m):
 							camera_pos = scale_position(camera_pos)
 							
 							TRK_Cameras.append([camera_index, [nearest_quad, camera_pos]])
-					
-					TRK_Cameras.sort(key=lambda x:x[0])
 				
 				elif collection.name.lower() == "sprites":
 					TRK_SpriteList = collection["spritelist"]
@@ -134,8 +136,6 @@ def main(context, export_path, m):
 					objects = collection.objects
 					object_index = -1
 					
-					TRK_Objects = []
-					
 					for object in objects:
 						if object.type == 'MESH':
 							try:
@@ -158,14 +158,10 @@ def main(context, export_path, m):
 								return {'CANCELLED'}
 							
 							TRK_Objects.append([object_index, [vertices, uvs, faces, material_name]])
-					
-					TRK_Objects.sort(key=lambda x:x[0])
 				
 				elif collection.name.lower() == "walls":
 					walls = collection.objects
 					wall_index = -1
-					
-					TRK_Walls = []
 					
 					for wall in walls:
 						if wall.type == 'MESH':
@@ -189,25 +185,36 @@ def main(context, export_path, m):
 								return {'CANCELLED'}
 							
 							TRK_Walls.append([wall_index, [vertices, uvs, material_name]])
-					
-					TRK_Walls.sort(key=lambda x:x[0])
 				
 				elif collection.name.lower() == "road":
 					roads = collection.objects
 					road = roads[0]
 					
-					name, vertices, uvs, faces, material_name, status = read_object(road, False)
+					if road.type == 'MESH':
+						
+						name, vertices, uvs, faces, material_name, status = read_object(road, False)
+						
+						if status == 1:
+							return {'CANCELLED'}
+						
+						TRK_Road = [vertices, uvs, faces, material_name, Quad_Walls, Quad_Objects, Quad_Sprites]
+				
+				elif collection.name.lower() == "navmesh":
+					navmeshes = collection.objects
+					navmesh = navmeshes[0]
 					
-					if status == 1:
-						return {'CANCELLED'}
-					
-					TRK_Road = [vertices, uvs, faces, material_name, Quad_Walls, Quad_Objects]
-					
+					if navmesh.type == 'MESH':
+						mesh = navmesh.data
+						for vert in mesh.vertices:
+							TRK_NavMesh.append(scale_position(vert.co))
 			
+			TRK_Cameras.sort(key=lambda x:x[0])
+			TRK_Objects.sort(key=lambda x:x[0])
+			TRK_Walls.sort(key=lambda x:x[0])
 			#print(Quad_Sprites)
 			#print(Quad_Objects)
 			#print(Quad_Walls)
-			trk = [TRK_Cameras, TRK_SpriteList, TRK_Objects, TRK_Walls, TRK_Road]
+			trk = [TRK_Cameras, TRK_SpriteList, TRK_Objects, TRK_Walls, TRK_Road, TRK_NavMesh]
 		
 		else:
 			print("ERROR: Unknown file extension %s." % (file_extension))
@@ -354,7 +361,7 @@ def write_z3d(file_path, objects):
 
 
 def write_trk_road(f, road):
-	vertices, uvs, quads, material_name, Quad_Walls, Quad_Objects = road
+	vertices, uvs, quads, material_name, Quad_Walls, Quad_Objects, Quad_Sprites = road
 	
 	vertex_data = [vertices, uvs]
 	write_trk_vertex_data(f, vertex_data)
@@ -382,20 +389,30 @@ def write_trk_road(f, road):
 		try:
 			child_objects = Quad_Objects[i]
 			num_objects = len(child_objects)
-			print("num_objects:", num_objects)
+			
+			f.write(struct.pack('<I', num_objects))
+			
 			for j in range(0, num_objects):
-				print("child_object:", child_objects[j])
-		except:
-			pass
+				f.write(struct.pack('<I', child_objects[j]))
 		
-		f.write(struct.pack('<I', 0))
-		f.write(struct.pack('<I', 0))
+		except:
+			f.write(struct.pack('<I', 0))
+		
+		try:
+			child_sprites = Quad_Sprites[i]
+			num_sprites = len(Quad_Sprites[i])
+			
+			f.write(struct.pack('<I', num_sprites))
+			
+			for j in range(0, num_sprites):
+				f.write(struct.pack('<3f', *child_sprites[j][0]))
+				f.write(struct.pack('<I', child_sprites[j][1]))
+		
+		except:
+			f.write(struct.pack('<I', 0))
 	
 	f.write(struct.pack('<I', len(material_name)))
 	f.write(material_name)
-	
-	for i in range(0, num_quads*2):
-		f.write(struct.pack('<3f', 0.0, 0.0, 0.0))
 	
 	return 0
 
@@ -486,7 +503,7 @@ def write_trk_cameras(f, cameras):
 def write_trk(file_path, trk):
 	os.makedirs(os.path.dirname(file_path), exist_ok = True)
 	
-	cameras, spritelist, objects, walls, road = trk
+	cameras, spritelist, objects, walls, road, navmesh = trk
 	
 	with open(file_path, "wb") as f:
 		write_trk_cameras(f, cameras)
@@ -494,6 +511,10 @@ def write_trk(file_path, trk):
 		write_trk_objects(f, objects)
 		write_trk_walls(f, walls)
 		write_trk_road(f, road)
+		
+		num_quads = len(road[2])
+		for i in range(0, num_quads*2):
+			f.write(struct.pack('<3f', *navmesh[i]))
 	
 	return 0
 
