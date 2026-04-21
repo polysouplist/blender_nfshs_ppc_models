@@ -73,12 +73,12 @@ def main(context, export_path, m):
 					except:
 						object_index = object_index + 1
 					
-					name, vertices, uvs, faces, material_name, status = read_object(object)
+					name, vertices, uvs, faces, material_name, status = read_object(object, False)
 					
 					if status == 1:
 						return {'CANCELLED'}
-				
-				Z3D_Objects.append([object_index, [name, vertices, uvs, faces, material_name]])
+					
+					Z3D_Objects.append([object_index, [name, vertices, uvs, faces, material_name]])
 			
 			Z3D_Objects.sort(key=lambda x:x[0])
 		
@@ -87,50 +87,74 @@ def main(context, export_path, m):
 			
 			for collection in main_collection.children:
 				if collection.name.lower() == "cameras":
-					objects = collection.objects
-					cameras = []
+					cameras = collection.objects
+					TRK_Cameras = []
 					
-					for object in objects:
-						if object.type == 'EMPTY':
-							nearest_road_quad = object["nearest_road_quad"]
-							camera_pos = Matrix(np.linalg.inv(m) @ object.matrix_world)
+					for camera in cameras:
+						if camera.type == 'EMPTY':
+							try:
+								camera_index = camera["camera_index"]
+							except:
+								camera_index = camera_index + 1
+							
+							nearest_quad = camera["nearest_quad"]
+							camera_pos = Matrix(np.linalg.inv(m) @ camera.matrix_world)
 							camera_pos = camera_pos.to_translation()
-							camera = [nearest_road_quad, camera_pos]
-						cameras.append(camera)
+							camera_pos = scale_position(camera_pos)
+							
+							TRK_Cameras.append([camera_index, [nearest_quad, camera_pos]])
+					
+					TRK_Cameras.sort(key=lambda x:x[0])
 				
 				elif collection.name.lower() == "sprites":
-					spritelist = collection["spritelist"]
+					TRK_SpriteList = collection["spritelist"]
 				
 				elif collection.name.lower() == "objects":
 					objects = collection.objects
-					meshes = []
+					object_index = -1
+					
+					TRK_Objects = []
 					
 					for object in objects:
 						if object.type == 'MESH':
-							name, vertices, uvs, faces, material_name, status = read_object(object)
-							mesh = [vertices, uvs, faces, material_name]
-						
-						if status == 1:
-							return {'CANCELLED'}
-						
-						meshes.append(mesh)
+							try:
+								object_index = object["object_index"]
+							except:
+								object_index = object_index + 1
+							
+							name, vertices, uvs, faces, material_name, status = read_object(object, True)
+							
+							if status == 1:
+								return {'CANCELLED'}
+							
+							TRK_Objects.append([object_index, [vertices, uvs, faces, material_name]])
+					
+					TRK_Objects.sort(key=lambda x:x[0])
 				
 				elif collection.name.lower() == "walls":
-					objects = collection.objects
-					walls = []
+					walls = collection.objects
+					wall_index = -1
 					
-					for object in objects:
-						if object.type == 'MESH':
-							name, vertices, uvs, faces, material_name, status = read_object(object)
-							wall = [vertices, uvs, material_name]
-						
-						if status == 1:
-							return {'CANCELLED'}
-						
-						walls.append(wall)
+					TRK_Walls = []
+					
+					for wall in walls:
+						if wall.type == 'MESH':
+							try:
+								wall_index = wall["wall_index"]
+							except:
+								wall_index = wall_index + 1
+							
+							name, vertices, uvs, faces, material_name, status = read_object(wall, True)
+							
+							if status == 1:
+								return {'CANCELLED'}
+							
+							TRK_Walls.append([wall_index, [vertices, uvs, material_name]])
+					
+					TRK_Walls.sort(key=lambda x:x[0])
 			
-			trk = [cameras, spritelist, meshes, walls]
-			
+			trk = [TRK_Cameras, TRK_SpriteList, TRK_Objects, TRK_Walls]
+		
 		else:
 			print("ERROR: Unknown file extension %s." % (file_extension))
 			return {'CANCELLED'}
@@ -154,7 +178,7 @@ def main(context, export_path, m):
 	return {'FINISHED'}
 
 
-def read_object(object):
+def read_object(object, flipped_uv):
 	vertices = []
 	faces = []
 	uvs = {}
@@ -171,8 +195,8 @@ def read_object(object):
 	
 	for vert in bm.verts:
 		if vert.hide == False:
-			x, y, z = vert.co
-			vertices.append([x, y*4, -z])
+			vert_co = scale_position(vert.co)
+			vertices.append(vert_co)
 			vertices_list[vert.index] = vert_ind
 			vert_ind += 1
 	
@@ -192,7 +216,10 @@ def read_object(object):
 			vertexIds.append(vert_index)
 			if has_uv == True:
 				if vert_index not in uvs:
-					uvs[vert_index] = uv_layer[loop_ind].uv
+					if flipped_uv == True:
+						uvs[vert_index] = flip_uv(uv_layer[loop_ind].uv)
+					else:
+						uvs[vert_index] = uv_layer[loop_ind].uv
 		
 		vertexId0, vertexId1, vertexId2 = vertexIds
 		
@@ -257,7 +284,7 @@ def write_z3d(file_path, objects):
 
 
 def write_trk_road(f, road):
-	vertices, uvs, material_name = walls[i]
+	vertices, uvs, material_name = walls[i][1]
 	
 	vertex_data = [vertices, uvs]
 	write_trk_vertex_data(f, vertex_data)
@@ -274,7 +301,7 @@ def write_trk_walls(f, walls):
 	f.write(struct.pack('<I', num_walls))
 	
 	for i in range(0, num_walls):
-		vertices, uvs, material_name = walls[i]
+		vertices, uvs, material_name = walls[i][1]
 		
 		vertex_data = [vertices, uvs]
 		write_trk_vertex_data(f, vertex_data)
@@ -291,7 +318,7 @@ def write_trk_objects(f, objects):
 	f.write(struct.pack('<I', num_objects))
 	
 	for i in range(0, num_objects):
-		vertices, uvs, polygons, material_name = objects[i]
+		vertices, uvs, polygons, material_name = objects[i][1]
 		
 		vertex_data = [vertices, uvs]
 		write_trk_vertex_data(f, vertex_data)
@@ -343,7 +370,7 @@ def write_trk_cameras(f, cameras):
 	f.write(struct.pack('<I', num_cameras))
 	
 	for i in range(0, num_cameras):
-		nearest_road_quad, camera_pos = cameras[i]
+		nearest_road_quad, camera_pos = cameras[i][1]
 		
 		f.write(struct.pack('<I', nearest_road_quad))
 		f.write(struct.pack('<3f', *camera_pos))
@@ -363,6 +390,20 @@ def write_trk(file_path, trk):
 		write_trk_walls(f, walls)
 	
 	return 0
+
+
+def scale_position(position):
+	x, y, z = position
+	position = x, y*4, -z
+	
+	return position
+
+
+def flip_uv(uv):
+	u, v = uv
+	uv = u, -v - 1.0
+	
+	return uv
 
 
 def id_to_bytes(id):
