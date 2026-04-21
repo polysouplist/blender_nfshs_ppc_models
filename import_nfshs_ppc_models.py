@@ -180,7 +180,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			nodes_collection.objects.link(locator)
 			locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
 			locator.rotation_mode = 'QUATERNION'
-			locator.rotation_quaternion = [locator_quaternion[2], locator_quaternion[0], locator_quaternion[1], locator_quaternion[3]]
+			locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[1], locator_quaternion[0], locator_quaternion[2]]
 			
 			sprites_collection["spritelist"] = trk[1]		
 			for j in range(0, len(sprite_positions)):
@@ -199,11 +199,11 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			road_collection.objects.link(obj)
 			obj.matrix_world = m
 		
-		navmesh = trk[5]
+		navmesh_vertices, navmesh_edges = trk[5]
 		if len(navmesh) > 0:
 			mesh = bpy.data.meshes.new("Navmesh")
 			obj = bpy.data.objects.new("Navmesh", mesh)
-			mesh.from_pydata(navmesh, [], [])
+			mesh.from_pydata(navmesh_vertices, navmesh_edges, [])
 			navmesh_collection.objects.link(obj)
 			obj.matrix_world = m
 	
@@ -419,11 +419,17 @@ def read_trk(file_path):
 		
 		road = [vertices, uvs, quads, texture_name]
 		
-		navmesh = []
+		navmesh_vertices = []
+		navmesh_edges = []
 		for i in range(0, (num_quad*2)):
 			navmesh_vertex = struct.unpack('<3f', f.read(0xC))
 			navmesh_vertex = scale_position(navmesh_vertex)
-			navmesh.append(navmesh_vertex)
+			navmesh_vertices.append(navmesh_vertex)
+		
+		for i in range(0, len(navmesh_vertices)):
+			navmesh_edges.append([i, (i + 1) % len(navmesh_vertices)])
+		
+		navmesh = [navmesh_vertices, navmesh_edges]	
 	
 	trk = [cameras, spritelist, objects, walls, road, navmesh]
 	
