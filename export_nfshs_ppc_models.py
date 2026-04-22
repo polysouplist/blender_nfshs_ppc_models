@@ -373,7 +373,10 @@ def write_trk_road(f, road):
 	for i in range(0, num_quads):
 		f.write(struct.pack('<4H', *quads[i][1]))
 		f.write(struct.pack('<3f', *quads[i][0]))
-		f.write(struct.pack('<4f', 0.0, 0.0, 0.0, 0.0))
+		
+		temp0 = quads[i][0][1]*2
+		temp1 = -temp0
+		f.write(struct.pack('<4f', 0.0, temp0, 0.0, temp1))
 		
 		num_plgn = len(Quad_Walls[i])
 		polygons = Quad_Walls[i]
