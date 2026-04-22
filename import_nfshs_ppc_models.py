@@ -497,7 +497,7 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 		
 		if has_uv == True:
 			for loop, uv in zip(BMFace.loops, face_uvs):
-				if flip_uv == True:
+				if flipped_uv == True:
 					uv = flip_uv(uv)
 					loop[uv_layer].uv = uv
 				else:
