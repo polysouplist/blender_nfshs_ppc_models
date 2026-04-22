@@ -73,7 +73,7 @@ def main(context, export_path, m):
 					except:
 						object_index = object_index + 1
 					
-					name, vertices, uvs, faces, material_name, status = read_object(object, False)
+					name, vertices, uvs, faces, material_name, status = read_object(object, False, False)
 					
 					if status == 1:
 						return {'CANCELLED'}
@@ -153,7 +153,7 @@ def main(context, export_path, m):
 							except:
 								pass
 							
-							name, vertices, uvs, faces, material_name, status = read_object(object, False)
+							name, vertices, uvs, faces, material_name, status = read_object(object, True, False)
 							
 							if status == 1:
 								return {'CANCELLED'}
@@ -171,7 +171,7 @@ def main(context, export_path, m):
 							except:
 								wall_index = wall_index + 1
 							
-							name, vertices, uvs, faces, material_name, status = read_object(wall, True)
+							name, vertices, uvs, faces, material_name, status = read_object(wall, True, True)
 							
 							for face in faces:
 								nearest_quad = face[0]
@@ -193,7 +193,7 @@ def main(context, export_path, m):
 					
 					if road.type == 'MESH':
 						
-						name, vertices, uvs, faces, material_name, status = read_object(road, False)
+						name, vertices, uvs, faces, material_name, status = read_object(road, True, False)
 						
 						for i in range(0, len(faces)):
 							quad_index = str(i)
@@ -249,7 +249,7 @@ def main(context, export_path, m):
 	return {'FINISHED'}
 
 
-def read_object(object, additional_data):
+def read_object(object, flipped_uv, additional_data):
 	vertices = []
 	faces = []
 	uvs = {}
@@ -290,7 +290,10 @@ def read_object(object, additional_data):
 			vertexIds.append(vert_index)
 			if has_uv == True:
 				if vert_index not in uvs:
-					uvs[vert_index] = uv_layer[loop_ind].uv
+					if flipped_uv == True:
+						uvs[vert_index] = flip_uv(uv_layer[loop_ind].uv)
+					else:	
+						uvs[vert_index] = uv_layer[loop_ind].uv
 		
 		if additional_data == True:
 			try:
@@ -541,6 +544,13 @@ def scale_position(position):
 	position = x, y*4, -z
 	
 	return position
+
+
+def flip_uv(uv):
+	u, v = uv
+	uv = u, -v + 1.0
+	
+	return uv
 
 
 def id_to_bytes(id):
