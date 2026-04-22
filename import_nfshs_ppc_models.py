@@ -103,8 +103,8 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		main_collection.children.link(walls_collection)
 		road_collection = bpy.data.collections.new("Road")
 		main_collection.children.link(road_collection)
-		nodes_collection = bpy.data.collections.new("Nodes")
-		main_collection.children.link(nodes_collection)
+		#nodes_collection = bpy.data.collections.new("Nodes")
+		#main_collection.children.link(nodes_collection)
 		sprites_collection = bpy.data.collections.new("Sprites")
 		main_collection.children.link(sprites_collection)
 		navmesh_collection = bpy.data.collections.new("Navmesh")
@@ -165,22 +165,25 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 				walls_collection.objects.link(wall)
 				wall.matrix_world = m
 		
-		vertices, uvs, polygons, texture_name = trk[4]
-		unpacked_polygons = []
+		vertices, uvs, polygons, texture_name = road
+		unpacked_quads = []
 		for i in range(0, len(polygons)):
-			unpacked_polygon = polygons[i][0]
+			unpacked_quad = polygons[i][0]
 			unpacked_locator = polygons[i][1]
 			unpacked_locator = scale_position(unpacked_locator)
 			locator_quaternion = polygons[i][2]
 			sprite_positions = polygons[i][5]
 			
-			unpacked_polygons.append(unpacked_polygon)
-			locator = bpy.data.objects.new("Node", None)
-			locator.empty_display_type = 'SINGLE_ARROW'
-			nodes_collection.objects.link(locator)
-			locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
-			locator.rotation_mode = 'QUATERNION'
-			locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[1], locator_quaternion[0], locator_quaternion[2]]
+			unpacked_quads.append(unpacked_quad)
+			
+			#locator = bpy.data.objects.new("Node", None)
+			#
+			#locator["nearest_quad"] = i
+			#locator.empty_display_type = 'SINGLE_ARROW'
+			#nodes_collection.objects.link(locator)
+			#locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
+			#locator.rotation_mode = 'QUATERNION'
+			#locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[0], locator_quaternion[1], -locator_quaternion[2]]
 			
 			sprites_collection["spritelist"] = trk[1]		
 			for j in range(0, len(sprite_positions)):
@@ -195,12 +198,15 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 				sprite_empty.matrix_world = m @ Matrix.Translation(sprite_pos)
 		
 		if len(vertices) > 0:
-			obj = create_object("Road", vertices, uvs, unpacked_polygons, texture_name, True, False)
+			obj = create_object("Road", vertices, uvs, unpacked_quads, texture_name, True, False)
+			for i in range(0, len(polygons)):
+				quad_index = str(i)
+				obj[quad_index] = polygons[i][2]
 			road_collection.objects.link(obj)
 			obj.matrix_world = m
 		
-		navmesh_vertices, navmesh_edges = trk[5]
-		if len(navmesh) > 0:
+		navmesh_vertices, navmesh_edges = navmesh
+		if len(navmesh_vertices) >= 1:
 			mesh = bpy.data.meshes.new("Navmesh")
 			obj = bpy.data.objects.new("Navmesh", mesh)
 			mesh.from_pydata(navmesh_vertices, navmesh_edges, [])
