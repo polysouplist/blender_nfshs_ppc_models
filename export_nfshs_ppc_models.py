@@ -93,6 +93,7 @@ def main(context, export_path, m):
 			Quad_Sprites = {}
 			Quad_Objects = {}
 			Quad_Walls = {}
+			Quad_Quaternion = {}
 			
 			for collection in main_collection.children:
 				if collection.name.lower() == "cameras":
@@ -194,10 +195,18 @@ def main(context, export_path, m):
 						
 						name, vertices, uvs, faces, material_name, status = read_object(road, False)
 						
+						for i in range(0, len(faces)):
+							quad_index = str(i)
+							
+							if i not in Quad_Quaternion:
+								Quad_Quaternion[i] = []
+							
+							Quad_Quaternion[i] = road[quad_index].to_list()
+						
 						if status == 1:
 							return {'CANCELLED'}
 						
-						TRK_Road = [vertices, uvs, faces, material_name, Quad_Walls, Quad_Objects, Quad_Sprites]
+						TRK_Road = [vertices, uvs, faces, material_name, Quad_Walls, Quad_Objects, Quad_Sprites, Quad_Quaternion]
 				
 				elif collection.name.lower() == "navmesh":
 					navmeshes = collection.objects
@@ -214,6 +223,7 @@ def main(context, export_path, m):
 			#print(Quad_Sprites)
 			#print(Quad_Objects)
 			#print(Quad_Walls)
+			#print(Quad_Quaternion)
 			trk = [TRK_Cameras, TRK_SpriteList, TRK_Objects, TRK_Walls, TRK_Road, TRK_NavMesh]
 		
 		else:
@@ -361,7 +371,7 @@ def write_z3d(file_path, objects):
 
 
 def write_trk_road(f, road):
-	vertices, uvs, quads, material_name, Quad_Walls, Quad_Objects, Quad_Sprites = road
+	vertices, uvs, quads, material_name, Quad_Walls, Quad_Objects, Quad_Sprites, Quad_Quaternion = road
 	
 	vertex_data = [vertices, uvs]
 	write_trk_vertex_data(f, vertex_data)
@@ -374,20 +384,26 @@ def write_trk_road(f, road):
 		f.write(struct.pack('<4H', *quads[i][1]))
 		f.write(struct.pack('<3f', *quads[i][0]))
 		
-		temp0 = quads[i][0][1]*2
-		temp1 = -temp0
-		f.write(struct.pack('<4f', 0.0, temp0, 0.0, temp1))
+		try:
+			quaternion = Quad_Quaternion[i]
+			f.write(struct.pack('<4f', *quaternion))
+		except:
+			f.write(struct.pack('<4f', 0.0, 1.0, 0.0, 0.0))
 		
-		num_plgn = len(Quad_Walls[i])
-		polygons = Quad_Walls[i]
-		f.write(struct.pack('<I', num_plgn))
-		
-		for j in range(0, num_plgn):
-			wall_index = polygons[j][0]
-			wall_polygon = polygons[j][1]
+		try:
+			polygons = Quad_Walls[i]
+			num_plgn = len(polygons)
 			
-			f.write(struct.pack('<I', wall_index))
-			f.write(struct.pack('<3H', *wall_polygon))
+			f.write(struct.pack('<I', num_plgn))
+			
+			for j in range(0, num_plgn):
+				wall_index = polygons[j][0]
+				wall_polygon = polygons[j][1]
+				
+				f.write(struct.pack('<I', wall_index))
+				f.write(struct.pack('<3H', *wall_polygon))
+		except:
+			f.write(struct.pack('<I', 0))
 		
 		try:
 			child_objects = Quad_Objects[i]
@@ -397,20 +413,18 @@ def write_trk_road(f, road):
 			
 			for j in range(0, num_objects):
 				f.write(struct.pack('<I', child_objects[j]))
-		
 		except:
 			f.write(struct.pack('<I', 0))
 		
 		try:
 			child_sprites = Quad_Sprites[i]
-			num_sprites = len(Quad_Sprites[i])
+			num_sprites = len(child_sprites)
 			
 			f.write(struct.pack('<I', num_sprites))
 			
 			for j in range(0, num_sprites):
 				f.write(struct.pack('<3f', *child_sprites[j][0]))
 				f.write(struct.pack('<I', child_sprites[j][1]))
-		
 		except:
 			f.write(struct.pack('<I', 0))
 	
