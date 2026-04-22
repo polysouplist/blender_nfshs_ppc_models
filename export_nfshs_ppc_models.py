@@ -86,6 +86,7 @@ def main(context, export_path, m):
 			print("Experimental .trk export requires adding the rest of data with a hex editor.")
 			
 			TRK_Cameras = []
+			TRK_SpriteList = []
 			TRK_Objects = []
 			TRK_Walls = []
 			TRK_NavMesh = []
