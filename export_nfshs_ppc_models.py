@@ -202,7 +202,10 @@ def main(context, export_path, m):
 							if i not in Quad_Quaternion:
 								Quad_Quaternion[i] = []
 							
-							Quad_Quaternion[i] = road[quad_index].to_list()
+							try:
+								Quad_Quaternion[i] = road[quad_index].to_list()
+							except:
+								pass
 						
 						if status == 1:
 							return {'CANCELLED'}
@@ -535,7 +538,10 @@ def write_trk(file_path, trk):
 		
 		num_quads = len(road[2])
 		for i in range(0, num_quads*2):
-			f.write(struct.pack('<3f', *navmesh[i]))
+			try:
+				f.write(struct.pack('<3f', *navmesh[i]))
+			except:
+				f.write(struct.pack('<3f', 0.0, 0.0, 0.0))
 	
 	return 0
 
