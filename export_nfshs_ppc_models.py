@@ -275,6 +275,10 @@ def read_object(object, flipped_uv, additional_data):
 			vertices_list[vert.index] = vert_ind
 			vert_ind += 1
 	
+	if len(vertices) > 0xFFFFFFFF:
+		print("ERROR: number of vertices higher than the supported by the game on mesh %s." % mesh.name)
+		return (name, vertices, uvs, faces, material_name, 1)
+	
 	try:
 		uv_layer = mesh.uv_layers.active.data
 		has_uv = True
@@ -318,6 +322,10 @@ def read_object(object, flipped_uv, additional_data):
 				faces.append([face_center, [vertexId2, vertexId1, vertexId3, vertexId0]])
 			else:	
 				faces.append([vertexId0, vertexId2, vertexId1])
+	
+	if len(faces) > 0xFFFFFFFF:
+		print("ERROR: number of faces higher than the supported by the game on mesh %s." % mesh.name)
+		return (name, vertices, uvs, faces, material_name, 1)
 	
 	material_name = (mesh.materials[0].name).encode('ascii')
 	
