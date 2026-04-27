@@ -1,4 +1,4 @@
-# Need for Speed High Stakes Pocket PC (.z3d, .trk) importer
+# Need for Speed High Stakes Pocket PC (.z3d, .trk) importer/exporter
 [![Blender](https://img.shields.io/badge/Blender-v3.6_LTS-blue?logo=blender&logoColor=white)](https://www.blender.org/download/lts/3-6/#versions "Download Blender")
 
 A Blender Add-on that enables importing and exporting vehicles and tracks as Need for Speed High Stakes Pocket PC (.z3d, .trk) files.
