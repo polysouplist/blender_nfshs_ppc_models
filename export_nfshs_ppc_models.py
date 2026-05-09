@@ -340,7 +340,10 @@ def write_z3d(file_path, objects):
 	
 	with open(file_path, "wb") as f:
 		
-		f.write(struct.pack('<I', 0))
+		header = '\x00'.join(['Version 0.1', '도경']).encode('cp949')
+		
+		f.write(struct.pack('<I', len(header)))
+		f.write(header)
 		
 		num_meshes = len(objects)
 		
