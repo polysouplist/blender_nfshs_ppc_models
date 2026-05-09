@@ -36,6 +36,7 @@ import os
 import time
 import struct
 import numpy as np
+from datetime import datetime
 
 
 def main(context, export_path, m):
@@ -224,10 +225,7 @@ def main(context, export_path, m):
 			TRK_Cameras.sort(key=lambda x:x[0])
 			TRK_Objects.sort(key=lambda x:x[0])
 			TRK_Walls.sort(key=lambda x:x[0])
-			#print(Quad_Sprites)
-			#print(Quad_Objects)
-			#print(Quad_Walls)
-			#print(Quad_Quaternion)
+			
 			trk = [TRK_Cameras, TRK_SpriteList, TRK_Objects, TRK_Walls, TRK_Road, TRK_NavMesh]
 		
 		else:
@@ -340,7 +338,12 @@ def write_z3d(file_path, objects):
 	
 	with open(file_path, "wb") as f:
 		
-		header = '\x00'.join(['Version 0.1', '도경']).encode('cp949')
+		year = (datetime.now().year).to_bytes(2, 'little')
+		day = (datetime.now().day).to_bytes(1, 'little')
+		month = (datetime.now().month).to_bytes(1, 'little')
+		minute = (datetime.now().minute).to_bytes(1, 'little')
+		hour = (datetime.now().hour).to_bytes(1, 'little')
+		header = b'\x00'.join(['Version 0.1'.encode('cp949'), '도경'.encode('cp949'), b'\xCC' * 11 + year + b'\xCC' * 2 + minute + hour + day + month, b'\xCC' * 19])
 		
 		f.write(struct.pack('<I', len(header)))
 		f.write(header)
