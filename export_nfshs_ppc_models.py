@@ -74,7 +74,8 @@ def main(context, export_path, m):
 					except:
 						object_index = object_index + 1
 					
-					name, vertices, uvs, faces, material_name, status = read_object(object, False, False)
+					name = (object.name).encode('ascii')
+					vertices, uvs, faces, material_name, status = read_object(object, False, False)
 					
 					if status == 1:
 						return {'CANCELLED'}
@@ -84,8 +85,6 @@ def main(context, export_path, m):
 			Z3D_Objects.sort(key=lambda x:x[0])
 		
 		elif file_extension == ".trk":
-			print("Experimental .trk export requires adding the rest of data with a hex editor.")
-			
 			TRK_Cameras = []
 			TRK_SpriteList = []
 			TRK_Objects = []
@@ -155,7 +154,7 @@ def main(context, export_path, m):
 							except:
 								pass
 							
-							name, vertices, uvs, faces, material_name, status = read_object(object, True, False)
+							vertices, uvs, faces, material_name, status = read_object(object, True, False)
 							
 							if status == 1:
 								return {'CANCELLED'}
@@ -173,7 +172,7 @@ def main(context, export_path, m):
 							except:
 								wall_index = wall_index + 1
 							
-							name, vertices, uvs, faces, material_name, status = read_object(wall, True, True)
+							vertices, uvs, faces, material_name, status = read_object(wall, True, True)
 							
 							for face in faces:
 								nearest_quad = face[0]
@@ -195,7 +194,7 @@ def main(context, export_path, m):
 					
 					if road.type == 'MESH':
 						
-						name, vertices, uvs, faces, material_name, status = read_object(road, True, False)
+						vertices, uvs, faces, material_name, status = read_object(road, True, False)
 						
 						for i in range(0, len(faces)):
 							quad_index = str(i)
@@ -264,8 +263,6 @@ def read_object(object, flipped_uv, additional_data):
 	bm = bmesh.new()
 	bm.from_mesh(mesh)
 	
-	name = (object.name).encode('ascii')
-	
 	for vert in bm.verts:
 		if vert.hide == False:
 			vert_co = scale_position(vert.co)
@@ -275,7 +272,7 @@ def read_object(object, flipped_uv, additional_data):
 	
 	if len(vertices) > 0xFFFFFFFF:
 		print("ERROR: number of vertices higher than the supported by the game on mesh %s." % mesh.name)
-		return (name, vertices, uvs, faces, material_name, 1)
+		return (vertices, uvs, faces, material_name, 1)
 	
 	try:
 		uv_layer = mesh.uv_layers.active.data
@@ -323,14 +320,19 @@ def read_object(object, flipped_uv, additional_data):
 	
 	if len(faces) > 0xFFFFFFFF:
 		print("ERROR: number of faces higher than the supported by the game on mesh %s." % mesh.name)
-		return (name, vertices, uvs, faces, material_name, 1)
+		return (vertices, uvs, faces, material_name, 1)
 	
-	material_name = (mesh.materials[0].name).encode('ascii')
+	material_name = mesh.materials[0].name
+	material_name_extension = material_name[-4:].lower()
+	if material_name_extension not in (".gif", ".bmp"):
+		print("ERROR: texture format %s not supported. Please use .gif or .bmp extension in material name." % material_name_extension)
+		return (vertices, uvs, faces, material_name, 1)
+	material_name = material_name.encode('ascii')
 	
 	bm.clear()
 	bm.free()
 	
-	return (name, vertices, uvs, faces, material_name, 0)
+	return (vertices, uvs, faces, material_name, 0)
 
 
 def write_z3d(file_path, objects):
@@ -343,6 +345,7 @@ def write_z3d(file_path, objects):
 		month = (datetime.now().month).to_bytes(1, 'little')
 		minute = (datetime.now().minute).to_bytes(1, 'little')
 		hour = (datetime.now().hour).to_bytes(1, 'little')
+		
 		header = b'\x00'.join(['Version 0.1'.encode('cp949'), '도경'.encode('cp949'), b'\xCC' * 11 + year + b'\xCC' * 2 + minute + hour + day + month, b'\xCC' * 19])
 		
 		f.write(struct.pack('<I', len(header)))
