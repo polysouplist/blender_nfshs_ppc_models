@@ -314,7 +314,8 @@ def read_object(object, flipped_uv, additional_data):
 		else:
 			if len(vertexIds) == 4:
 				face_center = scale_position(face.center)
-				faces.append([face_center, [vertexId2, vertexId1, vertexId3, vertexId0]])
+				face_area = face.area
+				faces.append([[vertexId2, vertexId1, vertexId3, vertexId0], face_center, face_area])
 			else:	
 				faces.append([vertexId0, vertexId2, vertexId1])
 	
@@ -405,14 +406,14 @@ def write_trk_road(f, road):
 	f.write(struct.pack('<I', num_quads))
 	
 	for i in range(0, num_quads):
-		f.write(struct.pack('<4H', *quads[i][1]))
-		f.write(struct.pack('<3f', *quads[i][0]))
+		f.write(struct.pack('<4H', *quads[i][0]))
+		f.write(struct.pack('<3f', *quads[i][1]))
 		
 		try:
-			quaternion = Quad_Quaternion[i]
-			f.write(struct.pack('<4f', *quaternion))
+			quad_unk0, quad_unk1, quad_unk2, quad_unk3 = Quad_Quaternion[i]
+			f.write(struct.pack('<4f', quad_unk0, quads[i][2], quad_unk2, quad_unk3))
 		except:
-			f.write(struct.pack('<4f', 0.0, 1.0, 0.0, 0.0))
+			f.write(struct.pack('<4f', 0.0, quads[i][2], 0.0, 0.0))
 		
 		try:
 			polygons = Quad_Walls[i]
