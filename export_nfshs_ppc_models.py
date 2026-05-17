@@ -75,7 +75,7 @@ def main(context, export_path, m):
 						object_index = object_index + 1
 					
 					name = (object.name).encode('ascii')
-					vertices, uvs, faces, material_name, status = read_object(object, False, False)
+					vertices, uvs, faces, material_name, status = read_object(object, True, False, False)
 					
 					if status == 1:
 						return {'CANCELLED'}
@@ -154,7 +154,7 @@ def main(context, export_path, m):
 							except:
 								pass
 							
-							vertices, uvs, faces, material_name, status = read_object(object, True, False)
+							vertices, uvs, faces, material_name, status = read_object(object, True, True, False)
 							
 							if status == 1:
 								return {'CANCELLED'}
@@ -172,7 +172,7 @@ def main(context, export_path, m):
 							except:
 								wall_index = wall_index + 1
 							
-							vertices, uvs, faces, material_name, status = read_object(wall, True, True)
+							vertices, uvs, faces, material_name, status = read_object(wall, True, True, True)
 							
 							for face in faces:
 								nearest_quad = face[0]
@@ -194,7 +194,7 @@ def main(context, export_path, m):
 					
 					if road.type == 'MESH':
 						
-						vertices, uvs, faces, material_name, status = read_object(road, True, False)
+						vertices, uvs, faces, material_name, status = read_object(road, False, True, False)
 						
 						for i in range(0, len(faces)):
 							quad_index = str(i)
@@ -250,10 +250,12 @@ def main(context, export_path, m):
 	return {'FINISHED'}
 
 
-def read_object(object, flipped_uv, additional_data):
+def read_object(object, is_triangle, flipped_uv, additional_data):
 	vertices = []
 	faces = []
 	uvs = {}
+	material_name = ""
+	
 	vertices_list = {}
 	vert_ind = 0
 	
@@ -298,26 +300,29 @@ def read_object(object, flipped_uv, additional_data):
 					else:	
 						uvs[vert_index] = uv_layer[loop_ind].uv
 		
-		if additional_data == True:
-			try:
-				nearest_quad = nearest_quads.data[face.index].value
-			except:
-				pass
-		
-		if len(vertexIds) == 3:
-			vertexId0, vertexId1, vertexId2 = vertexIds
-		elif len(vertexIds) == 4:
-			vertexId0, vertexId1, vertexId2, vertexId3 = vertexIds
-		
-		if additional_data == True:
-			faces.append([nearest_quad, [vertexId0, vertexId2, vertexId1]])
+		if is_triangle == True:	
+			if len(vertexIds) != 3:
+				print("ERROR: non triangular face on mesh %s." % mesh.name)
+				return (vertices, uvs, faces, material_name, 1)
+			else:
+				vertexId0, vertexId1, vertexId2 = vertexIds
+				if additional_data == True:
+					try:
+						nearest_quad = nearest_quads.data[face.index].value
+					except:
+						pass
+					faces.append([nearest_quad, [vertexId0, vertexId2, vertexId1]])
+				else:
+					faces.append([vertexId0, vertexId2, vertexId1])
 		else:
-			if len(vertexIds) == 4:
+			if len(vertexIds) != 4:
+				print("ERROR: non quad face on mesh %s." % mesh.name)
+				return (vertices, uvs, faces, material_name, 1)
+			else:
+				vertexId0, vertexId1, vertexId2, vertexId3 = vertexIds
 				face_center = scale_position(face.center)
 				face_area = face.area
 				faces.append([[vertexId2, vertexId1, vertexId3, vertexId0], face_center, face_area])
-			else:	
-				faces.append([vertexId0, vertexId2, vertexId1])
 	
 	if len(faces) > 0xFFFFFFFF:
 		print("ERROR: number of faces higher than the supported by the game on mesh %s." % mesh.name)
@@ -347,7 +352,7 @@ def write_z3d(file_path, objects):
 		minute = (datetime.now().minute).to_bytes(1, 'little')
 		hour = (datetime.now().hour).to_bytes(1, 'little')
 		
-		header = b'\x00'.join(['Version 0.1'.encode('cp949'), '도경'.encode('cp949'), b'\xCC' * 11 + year + b'\xCC' * 2 + minute + hour + day + month, b'\xCC' * 19])
+		header = b'\x00'.join(['Version 0.1'.encode('euc-kr'), '도경'.encode('euc-kr'), b'\xCC' * 11 + year + b'\xCC' * 2 + minute + hour + day + month, b'\xCC' * 19])
 		
 		f.write(struct.pack('<I', len(header)))
 		f.write(header)
@@ -411,7 +416,7 @@ def write_trk_road(f, road):
 		
 		try:
 			quad_unk0, quad_unk1, quad_unk2, quad_unk3 = Quad_Quaternion[i]
-			f.write(struct.pack('<4f', quad_unk0, quads[i][2], quad_unk2, quad_unk3))
+			f.write(struct.pack('<4f', quad_unk0, quad_unk1, quad_unk2, quad_unk3))
 		except:
 			f.write(struct.pack('<4f', 0.0, quads[i][2], 0.0, 0.0))
 		
