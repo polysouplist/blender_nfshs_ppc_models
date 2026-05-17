@@ -282,6 +282,57 @@ def read_z3d(file_path):
 	return z3d
 
 
+def read_trk_road(f):
+	quads = {}
+	
+	vertices, uvs = read_trk_vertex_data(f)
+	
+	num_quad = struct.unpack('<I', f.read(0x4))[0]
+	
+	for i in range(0, num_quad):
+		walls_indices = []
+		sprites = []
+		
+		quad_indices = struct.unpack('<4H', f.read(0x8))
+		quad_center = struct.unpack('<3f', f.read(0xC))
+		quad_quaternion = struct.unpack('<4f', f.read(0x10))
+		
+		num_plgn = struct.unpack('<I', f.read(0x4))[0]
+		for j in range(0, num_plgn):
+			wall_index = struct.unpack('<I', f.read(0x4))[0]
+			wall_polygon = struct.unpack('<3H', f.read(0x6))
+			
+			walls_indices.append([wall_index, wall_polygon])
+		
+		num_unknown = struct.unpack('<I', f.read(0x4))[0]
+		rendered_objects = []
+		if num_unknown >= 1:
+			#print("quad_index:", i) 
+			#print("num_unknown:", num_unknown)
+			
+			for j in range (0, num_unknown):
+				unknown = struct.unpack('<I', f.read(0x4))[0]
+				rendered_objects.append(unknown)
+				
+				#print("unknown:", unknown)
+		
+		num_sprites = struct.unpack('<I', f.read(0x4))[0]
+		for j in range(0, num_sprites):
+			sprite_pos = struct.unpack('<3f', f.read(0xC))
+			sprite_index = struct.unpack('<I', f.read(0x4))[0]
+			
+			sprites.append([sprite_pos, sprite_index])
+			
+		quads[i] = [quad_indices, quad_center, quad_quaternion, walls_indices, rendered_objects, sprites]
+	
+	texture_length = struct.unpack('<I', f.read(0x4))[0]
+	texture_name = f.read(texture_length)
+	
+	road = [vertices, uvs, quads, texture_name]
+	
+	return road
+
+
 def read_trk_walls(f):
 	walls = {}
 	
@@ -377,57 +428,11 @@ def read_trk(file_path):
 		spritelist = read_trk_spritelist(f)
 		objects = read_trk_objects(f)
 		walls = read_trk_walls(f)
-		
-		quads = {}
-		
-		vertices, uvs = read_trk_vertex_data(f)
-		
-		num_quad = struct.unpack('<I', f.read(0x4))[0]
-		
-		for i in range(0, num_quad):
-			walls_indices = []
-			sprites = []
-			
-			quad_indices = struct.unpack('<4H', f.read(0x8))
-			quad_center = struct.unpack('<3f', f.read(0xC))
-			quad_quaternion = struct.unpack('<4f', f.read(0x10))
-			
-			num_plgn = struct.unpack('<I', f.read(0x4))[0]
-			for j in range(0, num_plgn):
-				wall_index = struct.unpack('<I', f.read(0x4))[0]
-				wall_polygon = struct.unpack('<3H', f.read(0x6))
-				
-				walls_indices.append([wall_index, wall_polygon])
-			
-			num_unknown = struct.unpack('<I', f.read(0x4))[0]
-			rendered_objects = []
-			if num_unknown >= 1:
-				#print("quad_index:", i) 
-				#print("num_unknown:", num_unknown)
-				
-				for j in range (0, num_unknown):
-					unknown = struct.unpack('<I', f.read(0x4))[0]
-					rendered_objects.append(unknown)
-					
-					#print("unknown:", unknown)
-			
-			num_sprites = struct.unpack('<I', f.read(0x4))[0]
-			for j in range(0, num_sprites):
-				sprite_pos = struct.unpack('<3f', f.read(0xC))
-				sprite_index = struct.unpack('<I', f.read(0x4))[0]
-				
-				sprites.append([sprite_pos, sprite_index])
-				
-			quads[i] = [quad_indices, quad_center, quad_quaternion, walls_indices, rendered_objects, sprites]
-		
-		texture_length = struct.unpack('<I', f.read(0x4))[0]
-		texture_name = f.read(texture_length)
-		
-		road = [vertices, uvs, quads, texture_name]
+		road = read_trk_road(f)
 		
 		navmesh_vertices = []
 		navmesh_edges = []
-		for i in range(0, (num_quad*2)):
+		for i in range(0, (len(road[2])*2)):
 			navmesh_vertex = struct.unpack('<3f', f.read(0xC))
 			navmesh_vertex = scale_position(navmesh_vertex)
 			navmesh_vertices.append(navmesh_vertex)
