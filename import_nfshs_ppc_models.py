@@ -495,7 +495,15 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 		except:
 			pass
 		if BMFace.index != -1:
+			BMFace0 = BMFace
 			BMFace = BMFace.copy(verts=False, edges=False)
+			
+			original_face_indices = [vert.index for vert in BMFace.verts]
+			new_face_indices = [vert.index for vert in face_vertices]
+			same_winding_faces_as_original = [original_face_indices[-n:] + original_face_indices[:-n] for n in range(0, len(original_face_indices))]
+			if new_face_indices not in same_winding_faces_as_original:
+				BMFace.normal_flip()
+		
 		BMFace.index = i
 		if additional_data == True:
 			BMFace[flag] = nearest_quad
