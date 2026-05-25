@@ -5,12 +5,12 @@
 
 
 bl_info = {
-	"name": "Export to Need for Speed High Stakes Pocket PC models format (.z3d)",
+	"name": "Export to Need for Speed High Stakes Pocket PC models format (.z3d, .trk)",
 	"description": "Save objects as Need for Speed High Stakes Pocket PC files",
 	"author": "PolySoupList",
 	"version": (1, 0, 0),
 	"blender": (3, 6, 23),
-	"location": "File > Export > Need for Speed High Stakes Pocket PC (.z3d)",
+	"location": "File > Export > Need for Speed High Stakes Pocket PC (.z3d, .trk)",
 	"warning": "",
 	"wiki_url": "",
 	"tracker_url": "",
