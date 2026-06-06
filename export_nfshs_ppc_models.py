@@ -346,13 +346,20 @@ def write_z3d(file_path, objects):
 	
 	with open(file_path, "wb") as f:
 		
-		year = (datetime.now().year).to_bytes(2, 'little')
-		day = (datetime.now().day).to_bytes(1, 'little')
-		month = (datetime.now().month).to_bytes(1, 'little')
-		minute = (datetime.now().minute).to_bytes(1, 'little')
-		hour = (datetime.now().hour).to_bytes(1, 'little')
+		now = datetime.now()
+		year = (now.year).to_bytes(2, 'little')
+		day = (now.day).to_bytes(1, 'little')
+		month = (now.month).to_bytes(1, 'little')
+		minute = (now.minute).to_bytes(1, 'little')
+		hour = (now.hour).to_bytes(1, 'little')
 		
-		header = b'\x00'.join(['Version 0.1'.encode('euc-kr'), '도경'.encode('euc-kr'), b'\xCC' * 11 + year + b'\xCC' * 2 + minute + hour + day + month, b'\xCC' * 19])
+		header = [
+			'Version 0.1'.encode('euc-kr'),
+			'도경'.encode('euc-kr'),
+			b'\xCC' * 11 + year + b'\xCC' * 2 + minute + hour + day + month,
+			b'\xCC' * 19
+		]
+		header = b'\x00'.join(header)
 		
 		f.write(struct.pack('<I', len(header)))
 		f.write(header)
