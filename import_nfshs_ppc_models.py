@@ -483,9 +483,9 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 			face = face[1]
 		
 		if len(face) == 4:
-			face_vertices = [BMVert_dictionary[face[3]], BMVert_dictionary[face[1]], BMVert_dictionary[face[0]], BMVert_dictionary[face[2]]]
+			face_vertices = [BMVert_dictionary[face[1]], BMVert_dictionary[face[0]], BMVert_dictionary[face[2]], BMVert_dictionary[face[3]]]
 			if has_uv == True:
-				face_uvs = [uvs[face[3]], uvs[face[1]], uvs[face[0]], uvs[face[2]]]
+				face_uvs = [uvs[face[1]], uvs[face[0]], uvs[face[2]], uvs[face[3]]]
 		else:
 			face_vertices = [BMVert_dictionary[face[0]], BMVert_dictionary[face[2]], BMVert_dictionary[face[1]]]
 			if has_uv == True:
