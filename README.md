@@ -16,3 +16,6 @@ Go to `Edit > Preferences > Addons > Install` and either select .zip file or the
 `File > Import > Need for Speed High Stakes Pocket PC (.z3d, .trk)`
 |
 `File > Export > Need for Speed High Stakes Pocket PC (.z3d, .trk)`
+
+## License
+Released under the [GNU General Public License v3.0 or later](https://www.gnu.org/licenses/gpl-3.0)
