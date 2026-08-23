@@ -322,24 +322,21 @@ def read_object(object, is_triangle, flipped_uv, additional_data):
 				vertexId0, vertexId1, vertexId2, vertexId3 = vertexIds
 				face_center = scale_position(face.center)
 				
-				matrix_world = object.matrix_world
-				
 				v_0 = face.vertices[0]
 				v_1 = face.vertices[1]
 				v_2 = face.vertices[2]
 				
 				# Get the 3D coordinates of the first 3 vertices of the face
-				v0 = matrix_world @ mesh.vertices[v_0].co
-				v1 = matrix_world @ mesh.vertices[v_1].co
-				v2 = matrix_world @ mesh.vertices[v_2].co
+				v0 = mesh.vertices[v_0].co
+				v1 = mesh.vertices[v_1].co
+				v2 = mesh.vertices[v_2].co
 				
-				# Apply the transformation: x, y*4, -z
-				p0 = [v0.x, v0.y, v0.z*4]
-				p1 = [v1.x, v1.y, v1.z*4]
-				p2 = [v2.x, v2.y, v2.z*4]
+				p0 = [v0.x, v0.y*4, v0.z]
+				p1 = [v1.x, v1.y*4, v1.z]
+				p2 = [v2.x, v2.y*4, v2.z]
 				
 				a, b, c, d = calculate_plane_equation(p0, p1, p2)
-				plane_equation = [a, c, b, d]
+				plane_equation = [a, b, -c, d]
 				
 				faces.append([[vertexId1, vertexId0, vertexId2, vertexId3], face_center, plane_equation])
 	
