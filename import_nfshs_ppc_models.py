@@ -227,7 +227,8 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 				override = bpy.context.copy()
 				override['area'] = area
 				override['region'] = region
-				bpy.ops.view3d.view_all(override, use_all_regions=False, center=False)
+				with bpy.context.temp_override(**override):
+					bpy.ops.view3d.view_all(use_all_regions=False, center=False)
 	
 	print("Finished")
 	elapsed_time = time.time() - start_time
