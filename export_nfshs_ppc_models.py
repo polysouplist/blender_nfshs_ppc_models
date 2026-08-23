@@ -321,8 +321,27 @@ def read_object(object, is_triangle, flipped_uv, additional_data):
 			else:
 				vertexId0, vertexId1, vertexId2, vertexId3 = vertexIds
 				face_center = scale_position(face.center)
-				face_area = face.area
-				faces.append([[vertexId2, vertexId1, vertexId3, vertexId0], face_center, face_area])
+				
+				matrix_world = object.matrix_world
+				
+				v_0 = face.vertices[0]
+				v_1 = face.vertices[1]
+				v_2 = face.vertices[2]
+				
+				# Get the 3D coordinates of the first 3 vertices of the face
+				v0 = matrix_world @ mesh.vertices[v_0].co
+				v1 = matrix_world @ mesh.vertices[v_1].co
+				v2 = matrix_world @ mesh.vertices[v_2].co
+				
+				# Apply the transformation: x, y*4, -z
+				p0 = [v0.x, v0.y, v0.z*4]
+				p1 = [v1.x, v1.y, v1.z*4]
+				p2 = [v2.x, v2.y, v2.z*4]
+				
+				a, b, c, d = calculate_plane_equation(p0, p1, p2)
+				plane_equation = [a, c, b, d]
+				
+				faces.append([[vertexId1, vertexId0, vertexId2, vertexId3], face_center, plane_equation])
 	
 	if len(faces) > 0xFFFFFFFF:
 		print("ERROR: number of faces higher than the supported by the game on mesh %s." % mesh.name)
@@ -421,11 +440,7 @@ def write_trk_road(f, road):
 		f.write(struct.pack('<4H', *quads[i][0]))
 		f.write(struct.pack('<3f', *quads[i][1]))
 		
-		try:
-			quad_unk0, quad_unk1, quad_unk2, quad_unk3 = Quad_Quaternion[i]
-			f.write(struct.pack('<4f', quad_unk0, quad_unk1, quad_unk2, quad_unk3))
-		except:
-			f.write(struct.pack('<4f', 0.0, quads[i][2], 0.0, 0.0))
+		f.write(struct.pack('<4f', *quads[i][2]))
 		
 		try:
 			polygons = Quad_Walls[i]
@@ -574,6 +589,21 @@ def write_trk(file_path, trk):
 				f.write(struct.pack('<3f', 0.0, 0.0, 0.0))
 	
 	return 0
+
+
+def calculate_plane_equation(v0, v1, v2):
+	p0 = np.array(v0)
+	p1 = np.array(v1)
+	p2 = np.array(v2)
+	
+	# Vector cross product to find normal (A, B, C)
+	normal = np.cross(p1 - p0, p2 - p0)
+	A, B, C = normal
+	
+	# Find D
+	D = -np.dot(normal, p0)
+	
+	return [float(A), float(B), float(C), float(D)]
 
 
 def scale_position(position):
