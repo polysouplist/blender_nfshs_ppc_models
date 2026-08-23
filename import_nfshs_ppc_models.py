@@ -296,7 +296,7 @@ def read_trk_road(f):
 		
 		quad_indices = struct.unpack('<4H', f.read(0x8))
 		quad_center = struct.unpack('<3f', f.read(0xC))
-		quad_quaternion = struct.unpack('<4f', f.read(0x10))
+		quad_plane_equation = struct.unpack('<4f', f.read(0x10))
 		
 		num_plgn = struct.unpack('<I', f.read(0x4))[0]
 		for j in range(0, num_plgn):
@@ -324,7 +324,7 @@ def read_trk_road(f):
 			
 			sprites.append([sprite_pos, sprite_index])
 			
-		quads[i] = [quad_indices, quad_center, quad_quaternion, walls_indices, rendered_objects, sprites]
+		quads[i] = [quad_indices, quad_center, quad_plane_equation, walls_indices, rendered_objects, sprites]
 	
 	texture_length = struct.unpack('<I', f.read(0x4))[0]
 	texture_name = f.read(texture_length)
