@@ -509,6 +509,7 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 				BMFace.normal_flip()
 		
 		BMFace.index = i
+		BMFace.smooth = True
 		if additional_data == True:
 			BMFace[flag] = nearest_quad
 		
@@ -528,6 +529,9 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 		
 		if mat.node_tree.nodes[0].bl_idname != "ShaderNodeOutputMaterial":
 			mat.node_tree.nodes[0].name = material_name
+		
+		mat.node_tree.nodes[material_name].inputs["Specular IOR Level"].default_value = 0.0
+		mat.node_tree.nodes[material_name].inputs["Roughness"].default_value = 1.0
 		
 		texture_path_ = os.path.join(texture_path, material_name)
 		if os.path.exists(texture_path_):
@@ -553,6 +557,7 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 						mat_tex.image = texture_image
 			
 			mat.node_tree.links.new(mat.node_tree.nodes[material_name].inputs["Base Color"], mat_tex.outputs[0])
+			mat_tex.interpolation = 'Closest'
 		else:
 			print("WARNING: failed to open texture %s: no such file in '%s'." % (material_name, texture_path))
 	
