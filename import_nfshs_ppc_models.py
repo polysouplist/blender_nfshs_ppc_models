@@ -524,30 +524,37 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 	mat = bpy.data.materials.get(material_name)
 	if mat == None:
 		mat = bpy.data.materials.new(material_name)
-		mat.use_nodes = True
 		mat.name = material_name
 		
 		if mat.node_tree.nodes[0].bl_idname != "ShaderNodeOutputMaterial":
 			mat.node_tree.nodes[0].name = material_name
 		
-		gif_path = os.path.join(texture_path, material_name)
-		
-		with tempfile.TemporaryDirectory() as temp_dir:
-			gif_basename = os.path.splitext(os.path.basename(gif_path))[0]
-			png_path = os.path.join(temp_dir, f"{gif_basename}.png")
+		texture_path_ = os.path.join(texture_path, material_name)
+		if os.path.exists(texture_path_):
+			mat_tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
 			
-			with Image.open(gif_path.lower()) as img:
-				img.save(png_path, "PNG")
-		
-			if os.path.exists(png_path):
-				mat_tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
-				texture_image = bpy.data.images.load(png_path)
+			if texture_path_.lower().endswith('.bmp'):
+				texture_image = bpy.data.images.load(texture_path_)
 				texture_image.name = material_name
-				
-				texture_image.pack()
 				mat_tex.image = texture_image
-				
-				mat.node_tree.links.new(mat.node_tree.nodes[material_name].inputs["Base Color"], mat_tex.outputs[0])
+			else:
+				with tempfile.TemporaryDirectory() as temp_dir:
+					gif_name = os.path.splitext(os.path.basename(texture_path_))[0]
+					png_name = f"{gif_name}.png"
+					png_path = os.path.join(temp_dir, png_name)
+					
+					with Image.open(texture_path_.lower()) as img:
+						img.save(png_path, "PNG")
+					
+					if os.path.exists(png_path):
+						texture_image = bpy.data.images.load(png_path)
+						texture_image.name = material_name
+						texture_image.pack()
+						mat_tex.image = texture_image
+			
+			mat.node_tree.links.new(mat.node_tree.nodes[material_name].inputs["Base Color"], mat_tex.outputs[0])
+		else:
+			print("WARNING: failed to open texture %s: no such file in '%s'." % (material_name, texture_path))
 	
 	if mat.name not in me_ob.materials:
 		me_ob.materials.append(mat)
