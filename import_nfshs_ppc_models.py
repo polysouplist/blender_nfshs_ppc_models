@@ -9,7 +9,7 @@ bl_info = {
 	"description": "Import meshes files from Need for Speed High Stakes Pocket PC",
 	"author": "PolySoupList",
 	"version": (1, 0, 0),
-	"blender": (3, 6, 23),
+	"blender": (5, 2, 0),
 	"location": "File > Import > Need for Speed High Stakes Pocket PC (.z3d, .trk)",
 	"warning": "",
 	"wiki_url": "",
@@ -533,15 +533,13 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 		mat.node_tree.nodes[material_name].inputs["Specular IOR Level"].default_value = 0.0
 		mat.node_tree.nodes[material_name].inputs["Roughness"].default_value = 1.0
 		
+		mat.use_backface_culling = True
+		
 		texture_path_ = os.path.join(texture_path, material_name)
 		if os.path.exists(texture_path_):
 			mat_tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
 			
-			if texture_path_.lower().endswith('.bmp'):
-				texture_image = bpy.data.images.load(texture_path_)
-				texture_image.name = material_name
-				mat_tex.image = texture_image
-			else:
+			if texture_path_.lower().endswith('.gif'):
 				with tempfile.TemporaryDirectory() as temp_dir:
 					gif_name = os.path.splitext(os.path.basename(texture_path_))[0]
 					png_name = f"{gif_name}.png"
@@ -555,6 +553,10 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 						texture_image.name = material_name
 						texture_image.pack()
 						mat_tex.image = texture_image
+			else:
+				texture_image = bpy.data.images.load(texture_path_)
+				texture_image.name = material_name
+				mat_tex.image = texture_image
 			
 			mat.node_tree.links.new(mat.node_tree.nodes[material_name].inputs["Base Color"], mat_tex.outputs[0])
 			mat_tex.interpolation = 'Closest'
