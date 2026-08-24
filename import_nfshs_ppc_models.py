@@ -40,6 +40,8 @@ from mathutils import Matrix, Quaternion
 import os
 import time
 import struct
+import tempfile
+from PIL import Image
 
 
 def main(context, file_path, clear_scene, global_matrix):
@@ -68,11 +70,12 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 	print("Parsing file...")
 	parsing_time = time.time()
 	
-	file_extension = file_path[-4:].lower()
+	texture_path = os.path.split(file_path)[0]
+	file_extension = os.path.splitext(file_path)[1]
 	
-	if file_extension == ".z3d":
+	if file_extension.lower() == ".z3d":
 		objects = read_z3d(file_path)
-	elif file_extension == ".trk":
+	elif file_extension.lower() == ".trk":
 		trk = read_trk(file_path)
 	else:
 		print("ERROR: Unknown file extension %s." % (file_extension))
@@ -85,16 +88,16 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 	print("Importing data to scene...")
 	importing_time = time.time()
 	
-	if file_extension == ".z3d":
+	if file_extension.lower() == ".z3d":
 		for i in range(0, len(objects)):
 			name, vertices, uvs, polygons, texture_name = objects[i]
 			if len(vertices) > 0:
-				obj = create_object(name, vertices, uvs, polygons, texture_name, False, False)
+				obj = create_object(name, vertices, uvs, polygons, texture_name, False, False, texture_path)
 				obj["object_index"] = i
 				main_collection.objects.link(obj)
 				obj.matrix_world = m
 	
-	elif file_extension == ".trk":
+	elif file_extension.lower() == ".trk":
 		cameras_collection = bpy.data.collections.new("Cameras")
 		main_collection.children.link(cameras_collection)
 		objects_collection = bpy.data.collections.new("Objects")
@@ -149,7 +152,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 		for i in range(0, len(objects)):
 			vertices, uvs, polygons, texture_name = objects[i]
 			if len(vertices) >= 1:
-				object = create_object("Object", vertices, uvs, polygons, texture_name, True, False)
+				object = create_object("Object", vertices, uvs, polygons, texture_name, True, False, texture_path)
 				object["object_index"] = i
 				if i in objects_nearest_quads:
 					object["nearest_quad"] = objects_nearest_quads[i]
@@ -160,7 +163,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			vertices, uvs, texture_name = walls[i]
 			
 			if len(vertices) >= 1:
-				wall = create_object("Wall", vertices, uvs, walls_indices[i], texture_name, True, True)
+				wall = create_object("Wall", vertices, uvs, walls_indices[i], texture_name, True, True, texture_path)
 				wall["wall_index"] = i
 				walls_collection.objects.link(wall)
 				wall.matrix_world = m
@@ -198,7 +201,7 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 				sprite_empty.matrix_world = m @ Matrix.Translation(sprite_pos)
 		
 		if len(vertices) > 0:
-			obj = create_object("Road", vertices, uvs, unpacked_quads, texture_name, True, False)
+			obj = create_object("Road", vertices, uvs, unpacked_quads, texture_name, True, False, texture_path)
 			for i in range(0, len(polygons)):
 				quad_index = str(i)
 				obj[quad_index] = polygons[i][2]
@@ -448,7 +451,7 @@ def read_trk(file_path):
 	return trk
 
 
-def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, additional_data):
+def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, additional_data, texture_path):
 	#==================================================================================================
 	#Building Mesh
 	#==================================================================================================
@@ -526,6 +529,25 @@ def create_object(name, vertices, uvs, faces, texture_name, flipped_uv, addition
 		
 		if mat.node_tree.nodes[0].bl_idname != "ShaderNodeOutputMaterial":
 			mat.node_tree.nodes[0].name = material_name
+		
+		gif_path = os.path.join(texture_path, material_name)
+		
+		with tempfile.TemporaryDirectory() as temp_dir:
+			gif_basename = os.path.splitext(os.path.basename(gif_path))[0]
+			png_path = os.path.join(temp_dir, f"{gif_basename}.png")
+			
+			with Image.open(gif_path.lower()) as img:
+				img.save(png_path, "PNG")
+		
+			if os.path.exists(png_path):
+				mat_tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
+				texture_image = bpy.data.images.load(png_path)
+				texture_image.name = material_name
+				
+				texture_image.pack()
+				mat_tex.image = texture_image
+				
+				mat.node_tree.links.new(mat.node_tree.nodes[material_name].inputs["Base Color"], mat_tex.outputs[0])
 	
 	if mat.name not in me_ob.materials:
 		me_ob.materials.append(mat)
