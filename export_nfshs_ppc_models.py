@@ -36,7 +36,9 @@ import os
 import time
 import struct
 import numpy as np
+import shutil
 from datetime import datetime
+from PIL import Image
 
 
 def main(context, export_path, m):
@@ -56,12 +58,13 @@ def main(context, export_path, m):
 			continue
 		
 		file_path = os.path.join(export_path, main_collection.name)
+		os.makedirs(os.path.dirname(file_path), exist_ok = True)
 		
 		print("Reading scene data for main collection %s..." % (main_collection.name))
 		
-		file_extension = file_path[-4:].lower()
+		file_extension = os.path.splitext(file_path)[1]
 		
-		if file_extension == ".z3d":
+		if file_extension.lower() == ".z3d":
 			objects = main_collection.objects
 			object_index = -1
 			
@@ -75,7 +78,7 @@ def main(context, export_path, m):
 						object_index = object_index + 1
 					
 					name = (object.name).encode('ascii')
-					vertices, uvs, faces, material_name, status = read_object(object, True, False, False)
+					vertices, uvs, faces, material_name, status = read_object(object, True, False, False, export_path)
 					
 					if status == 1:
 						return {'CANCELLED'}
@@ -84,7 +87,7 @@ def main(context, export_path, m):
 			
 			Z3D_Objects.sort(key=lambda x:x[0])
 		
-		elif file_extension == ".trk":
+		elif file_extension.lower() == ".trk":
 			TRK_Cameras = []
 			TRK_SpriteList = []
 			TRK_Objects = []
@@ -154,7 +157,7 @@ def main(context, export_path, m):
 							except:
 								pass
 							
-							vertices, uvs, faces, material_name, status = read_object(object, True, True, False)
+							vertices, uvs, faces, material_name, status = read_object(object, True, True, False, export_path)
 							
 							if status == 1:
 								return {'CANCELLED'}
@@ -172,7 +175,7 @@ def main(context, export_path, m):
 							except:
 								wall_index = wall_index + 1
 							
-							vertices, uvs, faces, material_name, status = read_object(wall, True, True, True)
+							vertices, uvs, faces, material_name, status = read_object(wall, True, True, True, export_path)
 							
 							for face in faces:
 								nearest_quad = face[0]
@@ -194,7 +197,7 @@ def main(context, export_path, m):
 					
 					if road.type == 'MESH':
 						
-						vertices, uvs, faces, material_name, status = read_object(road, False, True, False)
+						vertices, uvs, faces, material_name, status = read_object(road, False, True, False, export_path)
 						
 						for i in range(0, len(faces)):
 							quad_index = str(i)
@@ -235,9 +238,9 @@ def main(context, export_path, m):
 		print("\tWriting data...")
 		writing_time = time.time()
 		
-		if file_extension == ".z3d":
+		if file_extension.lower() == ".z3d":
 			write_z3d(file_path, Z3D_Objects)
-		elif file_extension == ".trk":
+		elif file_extension.lower() == ".trk":
 			write_trk(file_path, trk)
 		
 		elapsed_time = time.time() - writing_time
@@ -250,7 +253,7 @@ def main(context, export_path, m):
 	return {'FINISHED'}
 
 
-def read_object(object, is_triangle, flipped_uv, additional_data):
+def read_object(object, is_triangle, flipped_uv, additional_data, export_path):
 	vertices = []
 	faces = []
 	uvs = {}
@@ -344,12 +347,65 @@ def read_object(object, is_triangle, flipped_uv, additional_data):
 		print("ERROR: number of faces higher than the supported by the game on mesh %s." % mesh.name)
 		return (vertices, uvs, faces, material_name, 1)
 	
-	material_name = mesh.materials[0].name
-	material_name_extension = material_name[-4:].lower()
-	if material_name_extension not in (".gif", ".bmp"):
+	if len(object.material_slots) == 0:
+		print("ERROR: no materials applied on mesh %s." % mesh.name)
+		return (vertices, uvs, faces, material_name, 1)
+	
+	mat = mesh.materials[0]
+	material_name = mat.name
+	material_name_extension = os.path.splitext(material_name)[1]
+	
+	if material_name_extension.lower() not in (".gif", ".bmp"):
 		print("ERROR: texture format %s not supported. Please use .gif or .bmp extension in material name." % material_name_extension)
 		return (vertices, uvs, faces, material_name, 1)
-	material_name = material_name.encode('ascii')
+	
+	for node in mat.node_tree.nodes:
+		if node.type == "TEX_IMAGE":
+			texture = node.image
+			if texture == None:
+				print("WARNING: no image on texture node %s of the material %s. Ignoring it." % (node.label, material_name))
+				continue
+			
+			if texture.has_data == False and len(texture.packed_files) == 0:
+				texture_test_path = os.path.realpath(bpy.path.abspath(texture.filepath))
+				if os.path.isfile(texture_test_path):
+					try:
+						texture.reload()
+						print("INFO: Reloaded image:", texture.name)
+					except Exception as e:
+						print("ERROR: image %s used on material %s doesn't have data, but the path exists. Exporter failed to reload it. Verify if the image is properly loaded in Blender." % (texture.name, material_name))
+						return (vertices, uvs, faces, material_name, 1)
+					texture.reload()
+				elif not os.path.isfile(texture_test_path):
+					print("ERROR: image %s used on material %s doesn't have data. Verify if the image is properly loaded in Blender." % (texture.name, material_name))
+					return (vertices, uvs, faces, material_name, 1)
+				#print("ERROR: image %s used on material %s doesn't have data. Verify if the image is properly loaded in Blender." % (texture.name, material_name))
+				#return (vertices, uvs, faces, material_name, 1)
+			
+			is_packed = False
+			if len(texture.packed_files) > 0:
+				is_packed = True
+				texture.unpack(method='WRITE_LOCAL')	# Default method, it unpacks to the current .blend directory
+			
+			#texture_path = bpy.path.abspath(texture.filepath)
+			texture_path = os.path.realpath(bpy.path.abspath(texture.filepath))
+			texture.filepath = texture_path
+			
+			texture_source_extension = os.path.splitext(os.path.basename(texture_path))[-1]
+			if texture_source_extension.lower() not in (".gif", ".bmp"):
+				if texture_source_extension in (".tga", ".png", ".psd", ".jpg", ".tiff", ".tif"):
+					print("WARNING: converting texture %s format from %s to .gif with Pillow." % (os.path.splitext(os.path.basename(texture_path))[0], texture_source_extension))
+					texture_path = convert_texture_to_gif(texture_path, export_path)
+				else:
+					print("ERROR: texture format %s not supported. Please use .gif or .bmp format." % texture_source_extension)
+					return (vertices, uvs, faces, material_name, 1)
+			else:
+				shutil.copy2(texture_path, export_path)
+			
+			if is_packed == True:
+				texture.pack()
+	
+	material_name = (os.path.basename(texture_path)).encode('ascii')
 	
 	bm.clear()
 	bm.free()
@@ -358,7 +414,6 @@ def read_object(object, is_triangle, flipped_uv, additional_data):
 
 
 def write_z3d(file_path, objects):
-	os.makedirs(os.path.dirname(file_path), exist_ok = True)
 	
 	with open(file_path, "wb") as f:
 		
@@ -586,6 +641,16 @@ def write_trk(file_path, trk):
 				f.write(struct.pack('<3f', 0.0, 0.0, 0.0))
 	
 	return 0
+
+
+def convert_texture_to_gif(texture_path, export_path):
+	texture_name = os.path.splitext(os.path.basename(texture_path))[0]
+	export_path = os.path.join(export_path, texture_name + ".gif")
+	
+	with Image.open(texture_path.lower()) as img:
+		img.save(export_path, format="GIF", interlace=False)
+	
+	return export_path
 
 
 def calculate_plane_equation(v0, v1, v2):
