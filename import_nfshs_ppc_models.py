@@ -293,41 +293,42 @@ def read_trk_road(f):
 	
 	num_quad = struct.unpack('<I', f.read(0x4))[0]
 	
-	for i in range(0, num_quad):
-		walls_indices = []
-		sprites = []
-		
+	for i in range(num_quad):		
 		quad_indices = struct.unpack('<4H', f.read(0x8))
 		quad_center = struct.unpack('<3f', f.read(0xC))
 		quad_plane_equation = struct.unpack('<4f', f.read(0x10))
 		
+		# Walls
 		num_plgn = struct.unpack('<I', f.read(0x4))[0]
-		for j in range(0, num_plgn):
+		walls_indices = []
+		for _ in range(num_plgn):
 			wall_index = struct.unpack('<I', f.read(0x4))[0]
 			wall_polygon = struct.unpack('<3H', f.read(0x6))
-			
 			walls_indices.append([wall_index, wall_polygon])
 		
-		num_unknown = struct.unpack('<I', f.read(0x4))[0]
-		rendered_objects = []
-		if num_unknown >= 1:
-			#print("quad_index:", i) 
-			#print("num_unknown:", num_unknown)
-			
-			for j in range (0, num_unknown):
-				unknown = struct.unpack('<I', f.read(0x4))[0]
-				rendered_objects.append(unknown)
-				
-				#print("unknown:", unknown)
+		# Objects
+		num_objects = struct.unpack('<I', f.read(0x4))[0]
+		objects = []
+		for _ in range(num_objects):
+			obj_id = struct.unpack('<I', f.read(0x4))[0]
+			objects.append(obj_id)
 		
+		# Sprites
 		num_sprites = struct.unpack('<I', f.read(0x4))[0]
-		for j in range(0, num_sprites):
+		sprites = []
+		for _ in range(num_sprites):
 			sprite_pos = struct.unpack('<3f', f.read(0xC))
 			sprite_index = struct.unpack('<I', f.read(0x4))[0]
-			
 			sprites.append([sprite_pos, sprite_index])
-			
-		quads[i] = [quad_indices, quad_center, quad_plane_equation, walls_indices, rendered_objects, sprites]
+		
+		quads[i] = [
+			quad_indices,
+			quad_center,
+			quad_plane_equation,
+			walls_indices,
+			objects,
+			sprites
+		]
 	
 	texture_length = struct.unpack('<I', f.read(0x4))[0]
 	texture_name = f.read(texture_length)
