@@ -179,16 +179,6 @@ def import_nfshs_ppc_models(context, file_path, clear_scene, m):
 			
 			unpacked_quads.append(unpacked_quad)
 			
-			#locator = bpy.data.objects.new("Node", None)
-			#
-			#locator["nearest_quad"] = i
-			#locator.empty_display_type = 'SINGLE_ARROW'
-			#nodes_collection.objects.link(locator)
-			#locator.matrix_world = m @ Matrix.Translation(unpacked_locator)
-			#locator.rotation_mode = 'QUATERNION'
-			#locator.rotation_quaternion = [locator_quaternion[3], locator_quaternion[0], locator_quaternion[1], -locator_quaternion[2]]
-			
-			sprites_collection["spritelist"] = trk[1]		
 			for j in range(0, len(sprite_positions)):
 				sprite_pos, sprite_index = sprite_positions[j]
 				sprite_pos = scale_position(sprite_pos)
