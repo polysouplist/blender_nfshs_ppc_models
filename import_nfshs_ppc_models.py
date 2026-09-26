@@ -428,7 +428,10 @@ def read_trk(file_path):
 		navmesh_vertices = []
 		navmesh_edges = []
 		for i in range(0, (len(road[2])*2)):
-			navmesh_vertex = struct.unpack('<3f', f.read(0xC))
+			data = f.read(0xC)
+			if len(data) < 0xC:
+				break
+			navmesh_vertex = struct.unpack('<3f', data)
 			navmesh_vertex = scale_position(navmesh_vertex)
 			navmesh_vertices.append(navmesh_vertex)
 		
