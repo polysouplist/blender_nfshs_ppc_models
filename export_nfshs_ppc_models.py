@@ -118,17 +118,24 @@ def main(context, export_path, m):
 							TRK_Cameras.append([camera_index, [nearest_quad, camera_pos]])
 				
 				elif collection.name.lower() == "sprites":
-					TRK_SpriteList = collection["spritelist"]
-					
 					sprites = collection.objects
+					sprite_name_to_index = {}
 					
 					for sprite in sprites:
 						if sprite.type == 'EMPTY':
 							try:
 								nearest_quad = sprite["nearest_quad"]
 							except:
-								pass
-							sprite_index = sprite["sprite_index"]
+								nearest_quad = 0
+							
+							sprite_name = sprite.name
+							sprite_name = sprite_name.split(".")[0]
+							
+							if sprite_name not in sprite_name_to_index:
+								sprite_name_to_index[sprite_name] = len(TRK_SpriteList)
+								TRK_SpriteList.append(sprite_name)
+							sprite_index = sprite_name_to_index[sprite_name]
+							
 							sprite_pos = Matrix(np.linalg.inv(m) @ sprite.matrix_world)
 							sprite_pos = sprite_pos.to_translation()
 							sprite_pos = scale_position(sprite_pos)
